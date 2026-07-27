@@ -77,6 +77,7 @@ export interface OutboundDetail {
   satuan: string;
   picChecker: string;
   keterangan: string;
+  gedungAsal?: string;
 }
 
 export interface OutboundHeader {
@@ -124,6 +125,7 @@ export interface KartuStockEntry {
   keluar: number;
   saldo: number;
   keterangan?: string;
+  lokasi?: string;
 }
 
 export interface Gedung {

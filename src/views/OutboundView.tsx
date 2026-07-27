@@ -5,7 +5,7 @@ import { OutboundDetail, OutboundHeader } from '../types';
 import { exportToExcel, generateSuratJalanPDF } from '../utils/exportUtils';
 
 export const OutboundView: React.FC = () => {
-  const { outboundHeaders, materials, currentUser, addOutbound } = useWms();
+  const { outboundHeaders, materials, currentUser, addOutbound, gedungList } = useWms();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -26,7 +26,8 @@ export const OutboundView: React.FC = () => {
       qty: 200,
       satuan: materials[0]?.satuan || '',
       picChecker: currentUser.nama,
-      keterangan: ''
+      keterangan: '',
+      gedungAsal: materials[0]?.lokasiDefaut || 'Gedung E1'
     }
   ]);
 
@@ -40,7 +41,8 @@ export const OutboundView: React.FC = () => {
         qty: 50,
         satuan: mat?.satuan || '',
         picChecker: currentUser.nama,
-        keterangan: ''
+        keterangan: '',
+        gedungAsal: mat?.lokasiDefaut || 'Gedung E1'
       }
     ]);
   };
@@ -60,7 +62,8 @@ export const OutboundView: React.FC = () => {
           ...item,
           materialId: mat.id,
           namaBarang: mat.namaBarang,
-          satuan: mat.satuan
+          satuan: mat.satuan,
+          gedungAsal: mat.lokasiDefaut || 'Gedung E1'
         };
       }
       return item;
@@ -235,6 +238,7 @@ export const OutboundView: React.FC = () => {
                                   <tr>
                                     <th className="p-2">Material ID</th>
                                     <th className="p-2">Nama Barang</th>
+                                    <th className="p-2">Gedung Asal</th>
                                     <th className="p-2">Qty</th>
                                     <th className="p-2">Satuan</th>
                                     <th className="p-2">PIC Checker</th>
@@ -246,6 +250,7 @@ export const OutboundView: React.FC = () => {
                                     <tr key={idx}>
                                       <td className="p-2 font-mono text-indigo-600 font-bold">{d.materialId}</td>
                                       <td className="p-2 font-semibold text-slate-900">{d.namaBarang}</td>
+                                      <td className="p-2 font-medium text-slate-600">{d.gedungAsal || '-'}</td>
                                       <td className="p-2 font-bold text-indigo-600">{d.qty}</td>
                                       <td className="p-2 text-slate-500">{d.satuan}</td>
                                       <td className="p-2 text-slate-700">{d.picChecker}</td>
@@ -353,8 +358,8 @@ export const OutboundView: React.FC = () => {
 
                 <div className="space-y-3">
                   {details.map((item, idx) => (
-                    <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-5 gap-3 items-center">
-                      <div className="sm:col-span-2">
+                    <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+                      <div className="sm:col-span-4">
                         <label className="block text-[11px] font-medium text-slate-600 mb-1">Pilih Material</label>
                         <select
                           value={item.materialId}
@@ -367,7 +372,7 @@ export const OutboundView: React.FC = () => {
                         </select>
                       </div>
 
-                      <div>
+                      <div className="sm:col-span-2">
                         <label className="block text-[11px] font-medium text-slate-600 mb-1">Qty Kirim</label>
                         <input
                           type="text"
@@ -381,7 +386,23 @@ export const OutboundView: React.FC = () => {
                         />
                       </div>
 
-                      <div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-medium text-slate-600 mb-1">Gedung Asal</label>
+                        <select
+                          value={item.gedungAsal || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setDetails(prev => prev.map((d, i) => i === idx ? { ...d, gedungAsal: val } : d));
+                          }}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                        >
+                          {gedungList.map(g => (
+                            <option key={g.id} value={g.nama}>{g.nama}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-3">
                         <label className="block text-[11px] font-medium text-slate-600 mb-1">Keterangan</label>
                         <input
                           type="text"
@@ -395,7 +416,7 @@ export const OutboundView: React.FC = () => {
                         />
                       </div>
 
-                      <div className="flex justify-end pt-4 sm:pt-0">
+                      <div className="sm:col-span-1 flex justify-end pt-4 sm:pt-0">
                         {details.length > 1 && (
                           <button
                             type="button"

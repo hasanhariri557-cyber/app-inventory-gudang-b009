@@ -21,6 +21,7 @@ export const KartuStockView: React.FC = () => {
     const rows = filteredEntries.map(e => ({
       'Tanggal': e.tanggal,
       'Jenis Transaksi': e.jenisTransaksi,
+      'Gedung / Lokasi': e.lokasi || '-',
       'Masuk (+)': e.masuk,
       'Keluar (-)': e.keluar,
       'Saldo Running': e.saldo,
@@ -31,10 +32,11 @@ export const KartuStockView: React.FC = () => {
 
   const handleExportPDF = () => {
     if (!selectedMaterial) return;
-    const columns = ['Tanggal', 'Jenis Transaksi', 'Masuk (+)', 'Keluar (-)', 'Saldo', 'Keterangan'];
+    const columns = ['Tanggal', 'Jenis Transaksi', 'Gedung / Lokasi', 'Masuk (+)', 'Keluar (-)', 'Saldo', 'Keterangan'];
     const rows = filteredEntries.map(e => [
       e.tanggal,
       e.jenisTransaksi,
+      e.lokasi || '-',
       e.masuk,
       e.keluar,
       e.saldo,
@@ -132,6 +134,7 @@ export const KartuStockView: React.FC = () => {
               <tr>
                 <th className="p-3.5">Tanggal</th>
                 <th className="p-3.5">Jenis Transaksi</th>
+                <th className="p-3.5 text-indigo-600">Gedung / Lokasi</th>
                 <th className="p-3.5 text-emerald-600">Masuk (+)</th>
                 <th className="p-3.5 text-rose-600">Keluar (-)</th>
                 <th className="p-3.5 text-indigo-600 font-bold">Saldo Akhir</th>
@@ -141,7 +144,7 @@ export const KartuStockView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={7} className="p-8 text-center text-slate-400 italic">
                     Belum ada catatan transaksi untuk material ini.
                   </td>
                 </tr>
@@ -157,6 +160,16 @@ export const KartuStockView: React.FC = () => {
                       }`}>
                         {e.jenisTransaksi}
                       </span>
+                    </td>
+                    <td className="p-3.5 font-semibold text-slate-700">
+                      {e.lokasi ? (
+                        <span className="inline-flex items-center space-x-1 text-xs text-slate-700 font-medium px-2 py-0.5 bg-slate-100 rounded-md border border-slate-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                          <span>{e.lokasi}</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
                     </td>
                     <td className="p-3.5 font-bold text-emerald-600">{e.masuk > 0 ? `+${e.masuk}` : '-'}</td>
                     <td className="p-3.5 font-bold text-rose-600">{e.keluar > 0 ? `-${e.keluar}` : '-'}</td>

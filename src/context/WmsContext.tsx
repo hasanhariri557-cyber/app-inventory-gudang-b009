@@ -37,6 +37,11 @@ import {
   INITIAL_ADMIN_AUTHORITIES,
   INITIAL_MENU_CONFIGS
 } from '../data/initialData';
+import { 
+  saveToFirestore, 
+  loadCollectionFromFirestore, 
+  syncCollectionToFirestore 
+} from '../lib/firebaseStore';
 
 export interface NotificationData {
   show: boolean;
@@ -65,6 +70,8 @@ interface WmsContextType {
   categories: MasterSettingItem[];
   units: MasterSettingItem[];
   zones: MasterSettingItem[];
+  
+  firebaseSyncStatus: 'loading' | 'synced' | 'error' | 'offline';
 
   // Global Notification Modal
   notification: NotificationData;
@@ -252,6 +259,116 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return localStorage.getItem(`${LOCAL_STORAGE_KEY}_appTitle`) || 'WMS Gudang';
   });
 
+  const [firebaseSyncStatus, setFirebaseSyncStatus] = useState<'loading' | 'synced' | 'error' | 'offline'>('loading');
+
+  useEffect(() => {
+    const loadAllFromCloud = async () => {
+      setFirebaseSyncStatus('loading');
+      try {
+        console.log('Fetching initial WMS dataset from Firestore...');
+        const cloudMaterials = await loadCollectionFromFirestore('materials');
+        const cloudUsers = await loadCollectionFromFirestore('users');
+        const cloudGedung = await loadCollectionFromFirestore('gedungList');
+        const cloudVendors = await loadCollectionFromFirestore('vendors');
+        const cloudIncoming = await loadCollectionFromFirestore('incomingHeaders');
+        const cloudRejects = await loadCollectionFromFirestore('rejects');
+        const cloudPutaway = await loadCollectionFromFirestore('putAways');
+        const cloudOutbound = await loadCollectionFromFirestore('outboundHeaders');
+        const cloudOpname = await loadCollectionFromFirestore('stockOpnames');
+        const cloudMutasi = await loadCollectionFromFirestore('mutasis');
+        const cloudKartuStock = await loadCollectionFromFirestore('kartuStocks');
+        const cloudCategories = await loadCollectionFromFirestore('categories');
+        const cloudUnits = await loadCollectionFromFirestore('units');
+        const cloudZones = await loadCollectionFromFirestore('zones');
+        const cloudPermissions = await loadCollectionFromFirestore('rolePermissions');
+        const cloudAdminAuth = await loadCollectionFromFirestore('adminAuthorities');
+        const cloudMenuConfigs = await loadCollectionFromFirestore('menuConfigs');
+        const cloudBranding = await loadCollectionFromFirestore('branding');
+
+        // If cloud database is totally empty, seed it with the current states
+        if (cloudMaterials.length === 0 && cloudUsers.length === 0) {
+          console.log('Firebase Firestore is empty. Seeding initial data from local states...');
+          await syncCollectionToFirestore('materials', materials);
+          await syncCollectionToFirestore('users', users);
+          await syncCollectionToFirestore('gedungList', gedungList);
+          await syncCollectionToFirestore('vendors', vendors);
+          await syncCollectionToFirestore('incomingHeaders', incomingHeaders);
+          await syncCollectionToFirestore('rejects', rejects);
+          await syncCollectionToFirestore('putAways', putAways);
+          await syncCollectionToFirestore('outboundHeaders', outboundHeaders);
+          await syncCollectionToFirestore('stockOpnames', stockOpnames);
+          await syncCollectionToFirestore('mutasis', mutasis);
+          await syncCollectionToFirestore('kartuStocks', kartuStocks);
+          await syncCollectionToFirestore('categories', categories);
+          await syncCollectionToFirestore('units', units);
+          await syncCollectionToFirestore('zones', zones);
+          
+          await saveToFirestore('rolePermissions', 'v1', rolePermissions);
+          await saveToFirestore('adminAuthorities', 'v1', adminAuthorities);
+          await saveToFirestore('menuConfigs', 'v1', menuConfigs);
+          await saveToFirestore('branding', 'v1', { appLogoUrl, appTitle });
+
+          setFirebaseSyncStatus('synced');
+          return;
+        }
+
+        // If cloud has data, overwrite local states with the loaded cloud data
+        if (cloudMaterials.length > 0) setMaterials(cloudMaterials);
+        if (cloudUsers.length > 0) setUsers(cloudUsers);
+        if (cloudGedung.length > 0) setGedungList(cloudGedung);
+        if (cloudVendors.length > 0) setVendors(cloudVendors);
+        if (cloudIncoming.length > 0) setIncomingHeaders(cloudIncoming);
+        if (cloudRejects.length > 0) setRejects(cloudRejects);
+        if (cloudPutaway.length > 0) setPutAways(cloudPutaway);
+        if (cloudOutbound.length > 0) setOutboundHeaders(cloudOutbound);
+        if (cloudOpname.length > 0) setStockOpnames(cloudOpname);
+        if (cloudMutasi.length > 0) setMutasis(cloudMutasi);
+        if (cloudKartuStock.length > 0) setKartuStocks(cloudKartuStock);
+        if (cloudCategories.length > 0) setCategories(cloudCategories);
+        if (cloudUnits.length > 0) setUnits(cloudUnits);
+        if (cloudZones.length > 0) setZones(cloudZones);
+
+        if (cloudPermissions.length > 0) {
+          const permDoc = cloudPermissions.find(p => p.id === 'v1');
+          if (permDoc) {
+            const { id, updatedAt, ...rest } = permDoc;
+            setRolePermissions(rest as any);
+          }
+        }
+        if (cloudAdminAuth.length > 0) {
+          const authDoc = cloudAdminAuth.find(a => a.id === 'v1');
+          if (authDoc) {
+            const { id, updatedAt, ...rest } = authDoc;
+            setAdminAuthorities(rest as any);
+          }
+        }
+        if (cloudMenuConfigs.length > 0) {
+          const configDoc = cloudMenuConfigs.find(c => c.id === 'v1');
+          if (configDoc) {
+            const { id, updatedAt, ...rest } = configDoc;
+            setMenuConfigs(rest as any);
+          }
+        }
+        if (cloudBranding.length > 0) {
+          const brandingDoc = cloudBranding.find(b => b.id === 'v1');
+          if (brandingDoc) {
+            if (brandingDoc.appLogoUrl !== undefined) setAppLogoUrl(brandingDoc.appLogoUrl);
+            if (brandingDoc.appTitle !== undefined) setAppTitle(brandingDoc.appTitle);
+          }
+        }
+
+        setFirebaseSyncStatus('synced');
+        showNotification('Database Cloud Aktif', 'Koneksi Firestore Berhasil! Data Anda sekarang tersinkronisasi di Cloud.', 'success', 'Sistem');
+      } catch (err) {
+        console.error('Failed to sync with Firebase Firestore:', err);
+        setFirebaseSyncStatus('error');
+        showNotification('Sync Cloud Gagal', 'Gagal memuat data dari Firebase Firestore. Menggunakan basis data lokal.', 'warning', 'Sistem');
+      }
+    };
+
+    loadAllFromCloud();
+  }, []);
+
   useEffect(() => {
     if (appLogoUrl) {
       localStorage.setItem(`${LOCAL_STORAGE_KEY}_appLogoUrl`, appLogoUrl);
@@ -326,6 +443,97 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_units`, JSON.stringify(units));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_zones`, JSON.stringify(zones));
   }, [users, materials, gedungList, vendors, incomingHeaders, rejects, putAways, outboundHeaders, stockOpnames, mutasis, kartuStocks, rolePermissions, adminAuthorities, menuConfigs, categories, units, zones]);
+
+  // Sync to Firestore on changes
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('materials', materials);
+  }, [materials, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('users', users);
+  }, [users, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('gedungList', gedungList);
+  }, [gedungList, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('vendors', vendors);
+  }, [vendors, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('incomingHeaders', incomingHeaders);
+  }, [incomingHeaders, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('rejects', rejects);
+  }, [rejects, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('putAways', putAways);
+  }, [putAways, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('outboundHeaders', outboundHeaders);
+  }, [outboundHeaders, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('stockOpnames', stockOpnames);
+  }, [stockOpnames, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('mutasis', mutasis);
+  }, [mutasis, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('kartuStocks', kartuStocks);
+  }, [kartuStocks, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('categories', categories);
+  }, [categories, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('units', units);
+  }, [units, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    syncCollectionToFirestore('zones', zones);
+  }, [zones, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    saveToFirestore('rolePermissions', 'v1', rolePermissions);
+  }, [rolePermissions, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    saveToFirestore('adminAuthorities', 'v1', adminAuthorities);
+  }, [adminAuthorities, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    saveToFirestore('menuConfigs', 'v1', menuConfigs);
+  }, [menuConfigs, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    saveToFirestore('branding', 'v1', { appLogoUrl, appTitle });
+  }, [appLogoUrl, appTitle, firebaseSyncStatus]);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -483,7 +691,8 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           masuk: detail.qtyDiterima,
           keluar: 0,
           saldo: newStock,
-          keterangan: `Terima dari Vendor ${headerData.vendor} (SJ: ${headerData.noSuratJalan})`
+          keterangan: `Terima dari Vendor ${headerData.vendor} (SJ: ${headerData.noSuratJalan})`,
+          lokasi: detail.lokasiSimpan
         });
       }
     });
@@ -584,7 +793,8 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           masuk: 0,
           keluar: detail.qty,
           saldo: newStock,
-          keterangan: `Kirim ke Customer ${outboundData.customer} (${outboundData.ekspedisi})`
+          keterangan: `Kirim ke Customer ${outboundData.customer} (${outboundData.ekspedisi})`,
+          lokasi: detail.gedungAsal || mat?.lokasiDefaut || 'Gedung E1'
         });
       }
     });
@@ -828,7 +1038,8 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateAdminAuthority,
       updateMenuConfig,
       checkPermission,
-      resetToDefaultData
+      resetToDefaultData,
+      firebaseSyncStatus
     }}>
       {children}
     </WmsContext.Provider>

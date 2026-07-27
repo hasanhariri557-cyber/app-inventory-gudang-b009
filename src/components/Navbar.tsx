@@ -7,7 +7,10 @@ import {
   ShieldCheck, 
   Menu, 
   Bell, 
-  Layers 
+  Layers,
+  Cloud,
+  CloudLightning,
+  CloudOff
 } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 
@@ -24,7 +27,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleSidebar,
   activeMenuTitle
 }) => {
-  const { currentUser, kpis, appLogoUrl, appTitle, setIsLoggedIn, showNotification } = useWms();
+  const { currentUser, kpis, appLogoUrl, appTitle, setIsLoggedIn, showNotification, firebaseSyncStatus } = useWms();
 
   const getRoleColor = (role: string) => {
     switch (role) {
@@ -78,6 +81,27 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Side Actions */}
         <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* Firebase Cloud Sync Badge */}
+          <div className="flex items-center">
+            {firebaseSyncStatus === 'loading' && (
+              <div className="flex items-center space-x-1 px-2 py-0.5 sm:px-2.5 sm:py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-xs font-semibold animate-pulse shadow-xs">
+                <CloudLightning className="w-3.5 h-3.5 text-blue-500" />
+                <span className="hidden sm:inline">Syncing...</span>
+              </div>
+            )}
+            {firebaseSyncStatus === 'synced' && (
+              <div className="flex items-center space-x-1 px-2 py-0.5 sm:px-2.5 sm:py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold shadow-xs">
+                <Cloud className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="hidden sm:inline">Cloud Live</span>
+              </div>
+            )}
+            {firebaseSyncStatus === 'error' && (
+              <div className="flex items-center space-x-1 px-2 py-0.5 sm:px-2.5 sm:py-1 bg-rose-50 text-rose-600 border border-rose-200 rounded-lg text-xs font-semibold shadow-xs">
+                <CloudOff className="w-3.5 h-3.5 text-rose-500" />
+                <span className="hidden sm:inline">Sync Error</span>
+              </div>
+            )}
+          </div>
           
 
 

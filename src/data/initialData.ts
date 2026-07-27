@@ -171,10 +171,10 @@ export const INITIAL_MUTASI: MutasiBarang[] = [
 ];
 
 export const INITIAL_KARTU_STOCK: KartuStockEntry[] = [
-  { id: 'KS-1', tanggal: '2026-07-20', materialId: 'MAT-001', jenisTransaksi: 'Incoming', refNo: 'REC-2026-001', masuk: 1000, keluar: 0, saldo: 1000, keterangan: 'Saldo Awal Bulan' },
-  { id: 'KS-2', tanggal: '2026-07-22', materialId: 'MAT-001', jenisTransaksi: 'Outbound', refNo: 'DO-2026-500', masuk: 0, keluar: 200, saldo: 800, keterangan: 'Pengiriman Customer A' },
-  { id: 'KS-3', tanggal: today, materialId: 'MAT-001', jenisTransaksi: 'Incoming', refNo: 'REC-2026-001', masuk: 480, keluar: 0, saldo: 1280, keterangan: 'Good Receiving PO-089' },
-  { id: 'KS-4', tanggal: today, materialId: 'MAT-001', jenisTransaksi: 'Outbound', refNo: 'DO-2026-551', masuk: 0, keluar: 100, saldo: 1180, keterangan: 'Pengiriman DO-2026-551' }
+  { id: 'KS-1', tanggal: '2026-07-20', materialId: 'MAT-001', jenisTransaksi: 'Incoming', refNo: 'REC-2026-001', masuk: 1000, keluar: 0, saldo: 1000, keterangan: 'Saldo Awal Bulan', lokasi: 'Gedung B1' },
+  { id: 'KS-2', tanggal: '2026-07-22', materialId: 'MAT-001', jenisTransaksi: 'Outbound', refNo: 'DO-2026-500', masuk: 0, keluar: 200, saldo: 800, keterangan: 'Pengiriman Customer A', lokasi: 'Gedung B1' },
+  { id: 'KS-3', tanggal: today, materialId: 'MAT-001', jenisTransaksi: 'Incoming', refNo: 'REC-2026-001', masuk: 480, keluar: 0, saldo: 1280, keterangan: 'Good Receiving PO-089', lokasi: 'Gedung B1' },
+  { id: 'KS-4', tanggal: today, materialId: 'MAT-001', jenisTransaksi: 'Outbound', refNo: 'DO-2026-551', masuk: 0, keluar: 100, saldo: 1180, keterangan: 'Pengiriman DO-2026-551', lokasi: 'Gedung B1' }
 ];
 
 export const INITIAL_ROLE_PERMISSIONS: RolePermissions = {
