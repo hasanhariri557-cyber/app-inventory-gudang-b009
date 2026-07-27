@@ -1,0 +1,6 @@
+{
+  "name": "WMS Gudang Pancawati",
+  "description": "Sistem Manajemen Gudang (B009) monitoring secara real-time, master data, receiving, layout denah, outbound, stock opname, kartu stok, laporan, dan integrasi spreadsheet.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
