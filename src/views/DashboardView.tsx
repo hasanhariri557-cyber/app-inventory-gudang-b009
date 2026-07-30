@@ -86,14 +86,30 @@ const KPICard: React.FC<{
 };
 
 export const DashboardView: React.FC = () => {
-  const { currentUser, kpis, materials, stockOpnames, kartuStocks, incomingHeaders, outboundHeaders, showNotification } = useWms();
+  const { currentUser, kpis, materials, stockOpnames, kartuStocks, incomingHeaders, outboundHeaders, showNotification, categories: contextCategories } = useWms();
 
   const [kategoriFilter, setKategoriFilter] = React.useState('Semua');
-  const categories = ['Semua', ...new Set(materials.map(m => m.kategori))];
+  const categories = React.useMemo(() => {
+    const set = new Set<string>();
+    if (contextCategories) {
+      contextCategories.forEach(c => {
+        if (c.nama && c.nama.trim()) {
+          set.add(c.nama.trim());
+        }
+      });
+    }
+    materials.forEach(m => {
+      if (m.kategori && m.kategori.trim()) {
+        set.add(m.kategori.trim());
+      }
+    });
+    return ['Semua', ...Array.from(set)];
+  }, [contextCategories, materials]);
 
-  const filteredMaterials = kategoriFilter === 'Semua' 
-    ? materials 
-    : materials.filter(m => m.kategori === kategoriFilter);
+  const filteredMaterials = React.useMemo(() => {
+    if (kategoriFilter === 'Semua') return materials;
+    return materials.filter(m => m.kategori?.trim() === kategoriFilter.trim());
+  }, [materials, kategoriFilter]);
 
   const filteredMaterialIds = React.useMemo(() => new Set(filteredMaterials.map(m => m.id)), [filteredMaterials]);
 
@@ -575,7 +591,7 @@ _Dikirim dari Sistem WMS Pergudangan_`;
               <p className="text-[11px] text-slate-500">Komposisi Balance vs Selisih Stok</p>
             </div>
             <span className="px-2.5 py-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">
-              Akurasi: {kpis.akurasiStock}%
+              Akurasi: {akurasiStock}%
             </span>
           </div>
 
