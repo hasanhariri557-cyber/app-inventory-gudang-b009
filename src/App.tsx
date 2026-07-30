@@ -16,6 +16,7 @@ import { MasterDataView } from './views/MasterDataView';
 import { IncomingView } from './views/IncomingView';
 import { WarehouseLayoutView } from './views/WarehouseLayoutView';
 import { OutboundView } from './views/OutboundView';
+import { OutboundManualView } from './views/OutboundManualView';
 import { StockOpnameView } from './views/StockOpnameView';
 import { KartuStockView } from './views/KartuStockView';
 import { LaporanView } from './views/LaporanView';
@@ -27,7 +28,8 @@ const MENU_TITLES: Record<MenuKey, string> = {
   master_data: '2. Master Data Barang',
   incoming: '3. Incoming Barang (Receiving)',
   warehouse_layout: '4. Warehouse Layout (Denah)',
-  outbound: '5. Outbound Delivery',
+  outbound: '5a. Outbound Delivery',
+  outbound_manual: '5b. Surat Jalan Manual',
   stock_opname: '6. Stock Opname Harian',
   kartu_stock: '7. Kartu Stock Ledger',
   laporan: '8. Pusat Laporan WMS',
@@ -111,6 +113,7 @@ function MainApp() {
       case 'incoming': return <IncomingView />;
       case 'warehouse_layout': return <WarehouseLayoutView />;
       case 'outbound': return <OutboundView />;
+      case 'outbound_manual': return <OutboundManualView />;
       case 'stock_opname': return <StockOpnameView />;
       case 'kartu_stock': return <KartuStockView />;
       case 'laporan': return <LaporanView onOpenSpreadsheetModal={() => setIsSpreadsheetModalOpen(true)} />;

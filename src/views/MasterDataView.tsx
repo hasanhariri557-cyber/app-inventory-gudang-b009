@@ -237,7 +237,7 @@ export const MasterDataView: React.FC = () => {
                 <th className="p-3.5">Nama Barang</th>
                 <th className="p-3.5">Kategori</th>
                 <th className="p-3.5">Satuan</th>
-                <th className="p-3.5">Stok Fisik</th>
+                <th className="p-3.5">Stok Sistem</th>
                 <th className="p-3.5">Status Aktif</th>
                 <th className="p-3.5 text-center">Aksi</th>
               </tr>

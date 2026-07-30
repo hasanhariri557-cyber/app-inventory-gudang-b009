@@ -116,6 +116,7 @@ export function generateSuratJalanPDF(
     palletOutCount: number;
     noKendaraan?: string;
     details: any[];
+    isManual?: boolean;
   },
   logoUrl?: string | null
 ) {
@@ -163,7 +164,11 @@ export function generateSuratJalanPDF(
 
   doc.text(`Ekspedisi: ${outbound.ekspedisi}`, 120, 34);
   doc.text(`No. Kendaraan: ${outbound.noKendaraan || '-'}`, 120, 40);
-  doc.text(`Total Pallet Out: ${outbound.palletOutCount} Pallet`, 120, 46);
+  if (outbound.isManual) {
+    doc.text(`Jenis Dokumen: Surat Jalan Manual`, 120, 46);
+  } else {
+    doc.text(`Total Pallet Out: ${outbound.palletOutCount} Pallet`, 120, 46);
+  }
   doc.text(`Status: OUTBOUND COMPLETED`, 120, 52);
 
   // Table Details

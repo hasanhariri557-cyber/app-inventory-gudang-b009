@@ -134,6 +134,85 @@ export const DashboardView: React.FC = () => {
     return stockOpnames.filter(s => filteredMaterialIds.has(s.materialId));
   }, [stockOpnames, kategoriFilter, filteredMaterialIds]);
 
+  const categoryOpnameReport = React.useMemo(() => {
+    // Get unique categories (trim and clean)
+    const categorySet = new Set<string>();
+    materials.forEach(m => {
+      if (m.kategori && m.kategori.trim()) {
+        categorySet.add(m.kategori.trim());
+      }
+    });
+    const uniqueCategories = Array.from(categorySet);
+
+    // Create mapping for materials
+    const materialToCategoryMap = new Map<string, string>();
+    materials.forEach(m => {
+      if (m.kategori) {
+        materialToCategoryMap.set(m.id, m.kategori.trim());
+      }
+    });
+
+    // Aggregate stock opnames
+    const reportMap: { [category: string]: { totalSKU: number; selesai: number; belumSelesai: number; netSelisih: number } } = {};
+    
+    uniqueCategories.forEach(cat => {
+      reportMap[cat] = {
+        totalSKU: 0,
+        selesai: 0,
+        belumSelesai: 0,
+        netSelisih: 0
+      };
+    });
+
+    const UNKNOWN_CAT = 'Lain-lain';
+
+    stockOpnames.forEach(so => {
+      const cat = materialToCategoryMap.get(so.materialId) || UNKNOWN_CAT;
+      if (!reportMap[cat]) {
+        reportMap[cat] = {
+          totalSKU: 0,
+          selesai: 0,
+          belumSelesai: 0,
+          netSelisih: 0
+        };
+      }
+      
+      if (so.status === 'Selesai') {
+        reportMap[cat].selesai += 1;
+      } else {
+        reportMap[cat].belumSelesai += 1;
+      }
+      reportMap[cat].netSelisih += so.selisih;
+    });
+
+    // Count unique SKU with opname records in each category
+    const skuWithOpnameSetByCategory: { [category: string]: Set<string> } = {};
+    stockOpnames.forEach(so => {
+      const cat = materialToCategoryMap.get(so.materialId) || UNKNOWN_CAT;
+      if (!skuWithOpnameSetByCategory[cat]) {
+        skuWithOpnameSetByCategory[cat] = new Set();
+      }
+      skuWithOpnameSetByCategory[cat].add(so.materialId);
+    });
+
+    Object.keys(reportMap).forEach(cat => {
+      reportMap[cat].totalSKU = skuWithOpnameSetByCategory[cat]?.size || 0;
+    });
+
+    // Return list sorted by category name
+    const allReports = Object.entries(reportMap).map(([category, stats]) => ({
+      category,
+      ...stats
+    })).filter(item => item.totalSKU > 0 || item.category !== UNKNOWN_CAT);
+
+    // Filter based on selected dashboard category filter if active
+    if (kategoriFilter !== 'Semua') {
+      return allReports.filter(item => item.category.trim() === kategoriFilter.trim());
+    }
+    return allReports;
+
+  }, [materials, stockOpnames, kategoriFilter]);
+
   const getLocalDate = (daysAgo: number) => {
     const d = new Date();
     const offset = d.getTimezoneOffset();
@@ -671,42 +750,49 @@ _Dikirim dari Sistem WMS Pergudangan_`;
           </div>
         </div>
 
-        {/* Outstanding Stock Opname List */}
+        {/* Report Stock Opname Kategori */}
         <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <ClipboardCheck className="w-4 h-4 text-purple-600" />
-              <span>Stock Opname Belum Selesai</span>
+              <span>Report Stock Opname Kategori</span>
             </h3>
-            <span className="text-xs text-slate-500 font-medium">Verifikasi Fisik</span>
+            <span className="text-xs text-slate-500 font-medium font-semibold uppercase tracking-wider">Ringkasan Audit</span>
           </div>
 
           <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px]">
                 <tr>
-                  <th className="p-2.5">Material ID</th>
-                  <th className="p-2.5">Nama Barang</th>
-                  <th className="p-2.5">Sistem vs Fisik</th>
-                  <th className="p-2.5">Selisih</th>
-                  <th className="p-2.5">PIC</th>
+                  <th className="p-2.5">Kategori</th>
+                  <th className="p-2.5 text-center">Total SKU</th>
+                  <th className="p-2.5 text-center">Status Selesai / Pending</th>
+                  <th className="p-2.5 text-right">Net Selisih</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredStockOpnames.filter(s => s.status === 'Belum Selesai').length === 0 ? (
+                {categoryOpnameReport.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-4 text-center text-slate-400 italic">Tidak ada stock opname pending.</td>
+                    <td colSpan={4} className="p-4 text-center text-slate-400 italic">Belum ada data stock opname.</td>
                   </tr>
                 ) : (
-                  filteredStockOpnames.filter(s => s.status === 'Belum Selesai').map(s => (
-                    <tr key={s.id} className="hover:bg-slate-50">
-                      <td className="p-2.5 font-mono font-semibold text-indigo-600">{s.materialId}</td>
-                      <td className="p-2.5 font-medium text-slate-900">{s.namaBarang}</td>
-                      <td className="p-2.5 text-slate-600">{s.qtySistem} vs <span className="font-bold text-purple-700">{s.qtyFisik}</span></td>
-                      <td className={`p-2.5 font-bold ${s.selisih === 0 ? 'text-emerald-600' : s.selisih > 0 ? 'text-blue-600' : 'text-rose-600'}`}>
-                        {s.selisih > 0 ? `+${s.selisih}` : s.selisih}
+                  categoryOpnameReport.map(item => (
+                    <tr key={item.category} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-2.5 font-bold text-slate-900">{item.category}</td>
+                      <td className="p-2.5 text-center font-bold text-indigo-600">{item.totalSKU} SKU</td>
+                      <td className="p-2.5 text-center">
+                        <span className="inline-flex gap-1 justify-center text-[9px] font-bold">
+                          <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded">
+                            {item.selesai} Selesai
+                          </span>
+                          <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded">
+                            {item.belumSelesai} Pending
+                          </span>
+                        </span>
                       </td>
-                      <td className="p-2.5 text-slate-500">{s.pic}</td>
+                      <td className={`p-2.5 text-right font-bold font-mono ${item.netSelisih === 0 ? 'text-slate-500' : item.netSelisih > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {item.netSelisih > 0 ? `+${item.netSelisih}` : item.netSelisih}
+                      </td>
                     </tr>
                   ))
                 )}

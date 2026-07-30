@@ -89,6 +89,7 @@ export interface OutboundHeader {
   palletOutCount: number;
   noKendaraan?: string;
   details: OutboundDetail[];
+  isManual?: boolean;
 }
 
 export interface StockOpnameItem {
@@ -158,6 +159,7 @@ export type MenuKey =
   | 'incoming'
   | 'warehouse_layout'
   | 'outbound'
+  | 'outbound_manual'
   | 'stock_opname'
   | 'kartu_stock'
   | 'laporan'

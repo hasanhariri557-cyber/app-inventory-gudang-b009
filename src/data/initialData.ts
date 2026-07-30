@@ -54,6 +54,7 @@ export const INITIAL_ROLE_PERMISSIONS: RolePermissions = {
   incoming: { Admin: true, Checker: true, Stoker: false },
   warehouse_layout: { Admin: true, Checker: false, Stoker: true },
   outbound: { Admin: true, Checker: true, Stoker: false },
+  outbound_manual: { Admin: true, Checker: true, Stoker: false },
   stock_opname: { Admin: true, Checker: true, Stoker: true },
   kartu_stock: { Admin: true, Checker: true, Stoker: true },
   laporan: { Admin: true, Checker: true, Stoker: false },

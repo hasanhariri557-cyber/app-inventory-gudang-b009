@@ -803,7 +803,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (role === 'Admin') return true;
     if (role === 'Checker') {
-      return ['dashboard', 'incoming', 'monitoring_reject', 'outbound', 'kartu_stock', 'stock_opname', 'laporan'].includes(menu);
+      return ['dashboard', 'incoming', 'monitoring_reject', 'outbound', 'outbound_manual', 'kartu_stock', 'stock_opname', 'laporan'].includes(menu);
     }
     if (role === 'Stoker') {
       return ['dashboard', 'stock_opname', 'put_away', 'warehouse_layout', 'mutasi', 'kartu_stock'].includes(menu);
@@ -1047,6 +1047,16 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addOutbound = (outboundData: Omit<OutboundHeader, 'id'>) => {
+    if (outboundData.isManual) {
+      const newOutbound: OutboundHeader = {
+        ...outboundData,
+        id: `OUT-${Date.now()}`
+      };
+      setOutboundHeaders(prev => [newOutbound, ...prev]);
+      showNotification('Surat Jalan Manual Berhasil', `Surat Jalan Manual ${outboundData.nomorDOSJ} berhasil diterbitkan tanpa mengurangi stok gudang.`, 'success', 'Surat Jalan Manual');
+      return;
+    }
+
     // Validate stock levels both globally and per-building
     for (const detail of outboundData.details) {
       if (detail.qty > 0) {
@@ -1141,13 +1151,31 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addStockOpname = (soData: Omit<StockOpnameItem, 'id' | 'tanggal' | 'selisih'>) => {
     const selisih = soData.qtyFisik - soData.qtySistem;
-    const newSO: StockOpnameItem = {
-      ...soData,
-      id: `SO-${Date.now()}`,
-      tanggal: today,
-      selisih
-    };
-    setStockOpnames(prev => [newSO, ...prev]);
+    
+    setStockOpnames(prev => {
+      const existingIdx = prev.findIndex(s => s.materialId === soData.materialId && s.status === 'Belum Selesai');
+      if (existingIdx !== -1) {
+        const updated = [...prev];
+        updated[existingIdx] = {
+          ...updated[existingIdx],
+          qtySistem: soData.qtySistem,
+          qtyFisik: soData.qtyFisik,
+          selisih,
+          penyebab: soData.penyebab,
+          pic: soData.pic,
+          tanggal: today
+        };
+        return updated;
+      } else {
+        const newSO: StockOpnameItem = {
+          ...soData,
+          id: `SO-${Date.now()}`,
+          tanggal: today,
+          selisih
+        };
+        return [newSO, ...prev];
+      }
+    });
 
     showNotification('Hasil Hitung Opname Disimpan', `Stock Opname untuk ${soData.namaBarang} (${soData.materialId}) berhasil dicatat.`, 'success', 'Stock Opname');
   };
