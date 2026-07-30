@@ -88,7 +88,7 @@ const MaterialSearchSelect: React.FC<MaterialSearchSelectProps> = ({
 };
 
 export const OutboundView: React.FC = () => {
-  const { outboundHeaders, materials, currentUser, addOutbound, gedungList, showNotification, getMaterialStockByGedung } = useWms();
+  const { outboundHeaders, materials, currentUser, addOutbound, gedungList, showNotification, getMaterialStockByGedung, appLogoUrl } = useWms();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -397,7 +397,7 @@ export const OutboundView: React.FC = () => {
                         <td className="p-3.5 text-center font-bold text-slate-900">{o.details.length}</td>
                         <td className="p-3.5 text-center space-x-2">
                           <button
-                            onClick={() => generateSuratJalanPDF(o)}
+                            onClick={() => generateSuratJalanPDF(o, appLogoUrl)}
                             className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold rounded-lg transition-all inline-flex items-center space-x-1 shadow-xs"
                           >
                             <Printer className="w-3 h-3" />

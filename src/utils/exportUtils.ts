@@ -81,17 +81,63 @@ export function exportToPDF(
   doc.save(`${filename}.pdf`);
 }
 
+// Helper to draw a modern, professional placeholder logo if no custom logo is uploaded
+function drawDefaultLogo(doc: jsPDF, x: number, y: number) {
+  // Draw a modern, professional placeholder box
+  doc.setDrawColor(226, 232, 240); // Slate-200
+  doc.setFillColor(248, 250, 252); // Slate-50
+  doc.setLineWidth(0.5);
+  doc.roundedRect(x, y, 30, 15, 2, 2, 'FD');
+
+  // Draw a small indigo icon
+  doc.setFillColor(79, 70, 229); // Indigo-600
+  doc.rect(x + 3, y + 4, 4, 7, 'F');
+  doc.setFillColor(16, 185, 129); // Emerald-500
+  doc.rect(x + 8, y + 6, 4, 5, 'F');
+
+  // Add text
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(30, 41, 59); // Slate-800
+  doc.text('PERUSAHAAN', x + 14, y + 7);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.5);
+  doc.setTextColor(100, 116, 139); // Slate-500
+  doc.text('LOGISTIK LOGO', x + 14, y + 11);
+}
+
 // Generate Surat Jalan / Outbound Delivery Note PDF
-export function generateSuratJalanPDF(outbound: {
-  nomorDOSJ: string;
-  customer: string;
-  tanggal: string;
-  ekspedisi: string;
-  palletOutCount: number;
-  noKendaraan?: string;
-  details: any[];
-}) {
+export function generateSuratJalanPDF(
+  outbound: {
+    nomorDOSJ: string;
+    customer: string;
+    tanggal: string;
+    ekspedisi: string;
+    palletOutCount: number;
+    noKendaraan?: string;
+    details: any[];
+  },
+  logoUrl?: string | null
+) {
   const doc = new jsPDF();
+
+  // Draw logo if exists, otherwise draw default fallback
+  if (logoUrl) {
+    try {
+      let format = 'PNG';
+      if (logoUrl.includes('image/jpeg') || logoUrl.includes('image/jpg')) {
+        format = 'JPEG';
+      } else if (logoUrl.includes('image/webp')) {
+        format = 'WEBP';
+      }
+      doc.addImage(logoUrl, format, 166, 10, 30, 15);
+    } catch (err) {
+      console.error("Error adding company logo to PDF:", err);
+      drawDefaultLogo(doc, 166, 10);
+    }
+  } else {
+    drawDefaultLogo(doc, 166, 10);
+  }
 
   // Header Title
   const titleText = 'SURAT JALAN / DELIVERY ORDER';
