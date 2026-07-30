@@ -87,6 +87,7 @@ export interface OutboundHeader {
   tanggal: string;
   ekspedisi: string;
   palletOutCount: number;
+  noKendaraan?: string;
   details: OutboundDetail[];
 }
 

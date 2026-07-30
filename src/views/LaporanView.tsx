@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Printer, Filter, Calendar, FileSpreadsheet } from 'lucide-react';
+import { FileText, Download, Printer, Filter, Calendar, FileSpreadsheet, Trash2 } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { exportToExcel, exportToPDF } from '../utils/exportUtils';
 
@@ -27,12 +27,51 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
     materials, 
     stockOpnames, 
     kartuStocks,
-    closeNotification
+    closeNotification,
+    deleteIncoming,
+    deleteOutbound,
+    deleteReject,
+    deleteStockOpname,
+    deleteKartuStock,
+    deleteMaterial
   } = useWms();
 
   useEffect(() => {
     closeNotification();
   }, [closeNotification]);
+
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    id: string;
+    type: ReportType;
+    label: string;
+  } | null>(null);
+
+  const isAdmin = currentUser && currentUser.role === 'Admin';
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirm) return;
+    const { id, type } = deleteConfirm;
+    
+    try {
+      if (type === 'incoming' || type === 'pallet_in' || type === 'vendor_mobil') {
+        await deleteIncoming(id);
+      } else if (type === 'outbound' || type === 'pallet_out') {
+        await deleteOutbound(id);
+      } else if (type === 'reject') {
+        await deleteReject(id);
+      } else if (type === 'stock') {
+        await deleteMaterial(id);
+      } else if (type === 'stock_opname') {
+        await deleteStockOpname(id);
+      } else if (type === 'kartu_stock') {
+        await deleteKartuStock(id);
+      }
+    } catch (err) {
+      console.error("Error executing delete:", err);
+    } finally {
+      setDeleteConfirm(null);
+    }
+  };
 
   const [activeReport, setActiveReport] = useState<ReportType>('incoming');
   const todayStr = new Date().toISOString().split('T')[0];
@@ -63,6 +102,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
         return incomingHeaders
           .filter(h => filterByDate(h.tanggal))
           .map(h => ({
+            'ID Transaksi': h.id,
             'Tanggal': h.tanggal,
             'Vendor': h.vendor,
             'No PO': h.nomorPO,
@@ -76,6 +116,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
         return outboundHeaders
           .filter(o => filterByDate(o.tanggal))
           .map(o => ({
+            'ID Transaksi': o.id,
             'Nomor DO/SJ': o.nomorDOSJ,
             'Tanggal': o.tanggal,
             'Customer': o.customer,
@@ -88,6 +129,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
         return rejects
           .filter(r => filterByDate(r.tanggal))
           .map(r => ({
+            'ID Transaksi': r.id,
             'Tanggal': r.tanggal,
             'Material ID': r.materialId,
             'Nama Barang': r.namaBarang,
@@ -113,6 +155,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
         return incomingHeaders
           .filter(h => filterByDate(h.tanggal))
           .map(h => ({
+            'ID Transaksi': h.id,
             'Tanggal': h.tanggal,
             'Vendor': h.vendor,
             'Plat Mobil': h.platKendaraan,
@@ -123,6 +166,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
         return outboundHeaders
           .filter(o => filterByDate(o.tanggal))
           .map(o => ({
+            'ID Transaksi': o.id,
             'Tanggal': o.tanggal,
             'Nomor DO/SJ': o.nomorDOSJ,
             'Customer': o.customer,
@@ -134,6 +178,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
         return stockOpnames
           .filter(s => filterByDate(s.tanggal))
           .map(s => ({
+            'ID Transaksi': s.id,
             'Tanggal': s.tanggal,
             'Material ID': s.materialId,
             'Nama Barang': s.namaBarang,
@@ -149,6 +194,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
         return incomingHeaders
           .filter(h => filterByDate(h.tanggal))
           .map(h => ({
+            'ID Transaksi': h.id,
             'Tanggal': h.tanggal,
             'Vendor': h.vendor,
             'Plat Kendaraan': h.platKendaraan,
@@ -160,6 +206,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
         return kartuStocks
           .filter(k => filterByDate(k.tanggal))
           .map(k => ({
+            'ID Transaksi': k.id,
             'Tanggal': k.tanggal,
             'Material ID': k.materialId,
             'Jenis Transaksi': k.jenisTransaksi,
@@ -204,7 +251,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
               <FileText className="w-5 h-5" />
             </div>
-            <span>Pusat Laporan transaksi Gudang Pancawati & Analitik</span>
+            <span>Report transaksi Gudang Pancawati</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             Ekspor Laporan Gudang Pancawati (Incoming, Outbound, Pallet, Stock Gudang, Opname).
@@ -319,39 +366,94 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
           <span className="text-[11px] text-slate-500 font-medium">Siap Cetak / Unduh</span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs text-slate-700">
             {reportData.length > 0 && (
-              <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
                 <tr>
                   {Object.keys(reportData[0]).map((key, i) => (
                     <th key={i} className="p-3">{key}</th>
                   ))}
+                  {isAdmin && <th className="p-3 text-right">Aksi</th>}
                 </tr>
               </thead>
             )}
             <tbody className="divide-y divide-slate-100">
               {reportData.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={isAdmin ? 10 : 8} className="p-8 text-center text-slate-400 italic">
                     Tidak ada data untuk laporan ini pada rentang tanggal yang dipilih.
                   </td>
                 </tr>
               ) : (
-                reportData.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                    {Object.values(row).map((val: any, colIdx) => (
-                      <td key={colIdx} className="p-3 text-slate-800">
-                        {String(val)}
-                      </td>
-                    ))}
-                  </tr>
-                ))
+                reportData.map((row, idx) => {
+                  const idValue = row['ID Transaksi'] || row['Material ID'] || '';
+                  
+                  return (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                      {Object.values(row).map((val: any, colIdx) => (
+                        <td key={colIdx} className="p-3 text-slate-800">
+                          {String(val)}
+                        </td>
+                      ))}
+                      {isAdmin && (
+                        <td className="p-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => idValue && setDeleteConfirm({ id: idValue, type: activeReport, label: idValue })}
+                            className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-all cursor-pointer inline-flex items-center"
+                            title="Hapus Data Ini (Aksi Admin)"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full overflow-hidden p-6 space-y-6">
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-slate-900">
+                Konfirmasi Hapus Data
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Apakah Anda yakin ingin menghapus data dengan ID <span className="font-semibold text-slate-800">{deleteConfirm.label}</span>? 
+                {deleteConfirm.type === 'stock' ? (
+                  <span> Tindakan ini akan menghapus data master barang secara permanen.</span>
+                ) : (
+                  <span> Tindakan ini akan menghapus catatan transaksi dan secara otomatis menyesuaikan/mengembalikan jumlah stok material terkait.</span>
+                )}
+              </p>
+            </div>
+            
+            <div className="flex items-center justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                Hapus Permanen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

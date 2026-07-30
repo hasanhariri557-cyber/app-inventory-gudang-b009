@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Package, Plus, Search, Filter, Edit3, Trash2, CheckCircle2, XCircle, FileSpreadsheet, AlertCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Package, Plus, Search, Filter, Edit3, Trash2, CheckCircle2, XCircle, FileSpreadsheet, AlertCircle, Upload } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { Material } from '../types';
 import { exportToExcel } from '../utils/exportUtils';
+import * as XLSX from 'xlsx';
 
 export const MasterDataView: React.FC = () => {
   const { currentUser, adminAuthorities, materials, categories, units, addMaterial, updateMaterial, deleteMaterial, showNotification } = useWms();
@@ -12,6 +13,7 @@ export const MasterDataView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [deletingMaterial, setDeletingMaterial] = useState<Material | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form State
   const [materialId, setMaterialId] = useState('');
@@ -25,7 +27,15 @@ export const MasterDataView: React.FC = () => {
 
   const openCreateModal = () => {
     setEditingMaterial(null);
-    const autoId = `MAT-${String(materials.length + 1).padStart(3, '0')}`;
+    const maxId = materials.reduce((max, mat) => {
+      const match = mat.id.match(/^MAT-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        return num > max ? num : max;
+      }
+      return max;
+    }, 0);
+    const autoId = `MAT-${String(maxId + 1).padStart(3, '0')}`;
     setMaterialId(autoId);
     setNamaBarang('');
     setKategori(categories[0]?.nama || 'Packaging');
@@ -100,6 +110,39 @@ export const MasterDataView: React.FC = () => {
     showNotification('Ekspor Excel Berhasil', `Data ${filteredMaterials.length} material berhasil diunduh dalam format Excel.`, 'success', 'Master Data Barang');
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const data = evt.target?.result;
+      const workbook = XLSX.read(data, { type: 'binary' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+      jsonData.forEach((row) => {
+        const newMaterial: Material = {
+          id: row['Material ID'],
+          namaBarang: row['Nama Barang'],
+          kategori: row['Kategori'],
+          satuan: row['Satuan'],
+          minStock: row['Stok Minimum'] || 0,
+          maxStock: row['Stok Maksimum'] || 1000,
+          currentStock: row['Stok Saat Ini'] || 0,
+          lokasiDefaut: row['Lokasi Default'] || 'Gedung A1',
+          statusAktif: row['Status Aktif'] === 'Aktif',
+        };
+        addMaterial(newMaterial);
+      });
+
+      showNotification('Upload Sukses', `${jsonData.length} material berhasil ditambahkan.`, 'success', 'Master Data Barang');
+    };
+    reader.readAsBinaryString(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   return (
     <div className="space-y-6">
       
@@ -119,14 +162,31 @@ export const MasterDataView: React.FC = () => {
 
         <div className="flex items-center space-x-2">
           {currentUser.role === 'Admin' && (
-            <button
-              onClick={handleExportExcel}
-              className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
-              title="Ekspor Excel (Khusus Admin)"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <span>Ekspor Excel</span>
-            </button>
+            <>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept=".xlsx, .xls"
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
+                title="Upload Excel (Khusus Admin)"
+              >
+                <Upload className="w-4 h-4 text-indigo-600" />
+                <span>Upload Massal</span>
+              </button>
+              <button
+                onClick={handleExportExcel}
+                className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
+                title="Ekspor Excel (Khusus Admin)"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                <span>Ekspor Excel</span>
+              </button>
+            </>
           )}
 
           <button
@@ -169,9 +229,9 @@ export const MasterDataView: React.FC = () => {
 
       {/* Materials Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
               <tr>
                 <th className="p-3.5">Material ID</th>
                 <th className="p-3.5">Nama Barang</th>

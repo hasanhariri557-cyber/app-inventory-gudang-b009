@@ -1,1 +1,203 @@
 @import "tailwindcss";
+
+/* 
+========================================================================
+SYSTEM TEMA: LIGHT / DARK MODE (SHIFT MALAM)
+========================================================================
+Membantu kenyamanan visual staf gudang yang bertugas pada shift malam
+dengan transisi yang mulus dan palet warna eye-safe.
+*/
+
+/* Transisi Halus pada seluruh elemen pendukung tema */
+*, ::before, ::after {
+  transition-property: background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Kustomisasi Mode Gelap secara Global */
+.dark {
+  color-scheme: dark;
+  
+  /* Overrides CSS Variables dari Tailwind v4 */
+  --color-slate-50: #0a0f1d;
+  --color-slate-100: #0f172a;
+  --color-slate-200: #1e293b;
+  --color-slate-300: #334155;
+  --color-slate-400: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-600: #94a3b8;
+  --color-slate-700: #cbd5e1;
+  --color-slate-800: #e2e8f0;
+  --color-slate-900: #f8fafc;
+}
+
+/* Overrides spesifik elemen ketika kelas .dark aktif */
+.dark body,
+.dark #root,
+.dark .min-h-screen,
+.dark .bg-slate-50 {
+  background-color: #080c16 !important; /* Canvas eye-safe biru gelap */
+  color: #f1f5f9 !important;
+}
+
+/* Override background kartu/panel putih agar menjadi slate gelap premium */
+.dark .bg-white {
+  background-color: #0f172a !important; /* Slate-900 */
+}
+
+/* Background panel sekunder */
+.dark .bg-slate-100,
+.dark .bg-slate-50.p-6,
+.dark .bg-slate-50.p-4 {
+  background-color: #1e293b !important; /* Slate-800 */
+}
+
+.dark .bg-indigo-50,
+.dark .bg-blue-50 {
+  background-color: rgba(99, 102, 241, 0.1) !important;
+  color: #818cf8 !important;
+}
+
+.dark .bg-emerald-50,
+.dark .bg-green-50 {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  color: #34d399 !important;
+}
+
+.dark .bg-rose-50,
+.dark .bg-red-50 {
+  background-color: rgba(244, 63, 94, 0.1) !important;
+  color: #fb7185 !important;
+}
+
+.dark .bg-amber-50,
+.dark .bg-yellow-50 {
+  background-color: rgba(245, 158, 11, 0.1) !important;
+  color: #fbbf24 !important;
+}
+
+/* Text Overrides */
+.dark .text-slate-900 {
+  color: #f8fafc !important; /* Slate-50 */
+}
+
+.dark .text-slate-800 {
+  color: #f1f5f9 !important; /* Slate-100 */
+}
+
+.dark .text-slate-700 {
+  color: #e2e8f0 !important; /* Slate-200 */
+}
+
+.dark .text-slate-600 {
+  color: #cbd5e1 !important; /* Slate-300 */
+}
+
+.dark .text-slate-500 {
+  color: #94a3b8 !important; /* Slate-400 */
+}
+
+.dark .text-slate-400 {
+  color: #64748b !important; /* Slate-500 */
+}
+
+/* Card Borders, Table Borders, and Lines */
+.dark .border-slate-200,
+.dark .border-slate-150,
+.dark .border-slate-100,
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b !important; /* Slate-800 */
+}
+
+/* Table Headers & Cells */
+.dark thead,
+.dark .bg-slate-50.text-slate-600 {
+  background-color: #1e293b !important;
+  color: #e2e8f0 !important;
+}
+
+.dark tr.border-b {
+  border-color: #1e293b !important;
+}
+
+/* Inputs, Selects, and Textareas */
+.dark input[type="text"],
+.dark input[type="number"],
+.dark input[type="date"],
+.dark input[type="password"],
+.dark select,
+.dark textarea {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 1px #6366f1 !important;
+}
+
+/* Recharts (Diagram) Overrides */
+.dark .recharts-cartesian-grid line {
+  stroke: #1e293b !important;
+}
+
+.dark .recharts-text {
+  fill: #94a3b8 !important;
+}
+
+.dark .recharts-legend-item-text {
+  color: #cbd5e1 !important;
+}
+
+.dark .recharts-default-tooltip {
+  background-color: #0f172a !important;
+  border: 1px solid #334155 !important;
+  color: #f8fafc !important;
+}
+
+/* Shadow adjustment for Dark Mode */
+.dark .shadow-xs,
+.dark .shadow-sm,
+.dark .shadow-md,
+.dark .shadow-lg,
+.dark .shadow-xl {
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Scrollbar styling for Dark Mode */
+.dark ::-webkit-scrollbar-track {
+  background: #080c16;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Map denah/layout adjustments */
+.dark .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+}
+.dark .text-emerald-800 {
+  color: #34d399 !important;
+}
+.dark .bg-rose-100 {
+  background-color: rgba(244, 63, 94, 0.2) !important;
+}
+.dark .text-rose-800 {
+  color: #fb7185 !important;
+}
+.dark .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.2) !important;
+}
+.dark .text-amber-800 {
+  color: #fbbf24 !important;
+}

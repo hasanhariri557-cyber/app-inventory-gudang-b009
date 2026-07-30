@@ -40,8 +40,12 @@ import {
 import { 
   saveToFirestore, 
   loadCollectionFromFirestore, 
-  syncCollectionToFirestore 
+  syncCollectionToFirestore,
+  deleteFromFirestore,
+  syncCollectionIncrementally,
+  db
 } from '../lib/firebaseStore';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
 
 export interface NotificationData {
   show: boolean;
@@ -107,7 +111,7 @@ interface WmsContextType {
   };
 
   // Actions
-  addMaterial: (m: Omit<Material, 'id' | 'currentStock'> & { id?: string }) => void;
+  addMaterial: (m: Omit<Material, 'id' | 'currentStock'> & { id?: string; currentStock?: number }) => void;
   updateMaterial: (id: string, m: Partial<Material>) => void;
   deleteMaterial: (id: string) => void;
   
@@ -135,6 +139,12 @@ interface WmsContextType {
   updateUnit: (id: string, u: Partial<MasterSettingItem>) => void;
   deleteUnit: (id: string) => void;
   
+  deleteIncoming: (id: string) => Promise<void>;
+  deleteOutbound: (id: string) => Promise<void>;
+  deleteReject: (id: string) => Promise<void>;
+  deleteStockOpname: (id: string) => Promise<void>;
+  deleteKartuStock: (id: string) => Promise<void>;
+  
   // Menu & Admin Authorization Updaters
   updateRolePermission: (menu: MenuKey, role: UserRole, allowed: boolean) => void;
   updateAdminAuthority: <K extends keyof AdminAuthorities>(key: K, val: AdminAuthorities[K]) => void;
@@ -142,13 +152,39 @@ interface WmsContextType {
 
   checkPermission: (menu: string) => boolean;
   resetToDefaultData: () => void;
+  getMaterialStockByGedung: (materialId: string) => Record<string, number>;
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
 }
 
 const WmsContext = createContext<WmsContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'WMS_GUDANG_TERINTEGRASI_DATA_V1';
+const LOCAL_STORAGE_KEY = 'WMS_GUDANG_TERINTEGRASI_DATA_V2';
 
 export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('wms_theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  const toggleTheme = () => {
+    setTheme(prev => {
+      const next = prev === 'light' ? 'dark' : 'light';
+      localStorage.setItem('wms_theme', next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [theme]);
+
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_users`);
     return saved ? JSON.parse(saved) : INITIAL_USERS;
@@ -203,7 +239,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [incomingHeaders, setIncomingHeaders] = useState<IncomingHeader[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_incoming`);
-    return saved ? JSON.parse(saved) : INITIAL_INCOMING;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [rejects, setRejects] = useState<RejectIncoming[]>(() => {
@@ -261,6 +297,9 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [firebaseSyncStatus, setFirebaseSyncStatus] = useState<'loading' | 'synced' | 'error' | 'offline'>('loading');
 
+  const lastCloudStrings = React.useRef<{ [key: string]: string }>({});
+  const unsubscribersRef = React.useRef<(() => void)[]>([]);
+
   useEffect(() => {
     const loadAllFromCloud = async () => {
       setFirebaseSyncStatus('loading');
@@ -308,57 +347,167 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           await saveToFirestore('menuConfigs', 'v1', menuConfigs);
           await saveToFirestore('branding', 'v1', { appLogoUrl, appTitle });
 
-          setFirebaseSyncStatus('synced');
-          return;
+          lastCloudStrings.current['materials'] = JSON.stringify(materials);
+          lastCloudStrings.current['users'] = JSON.stringify(users);
+          lastCloudStrings.current['gedungList'] = JSON.stringify(gedungList);
+          lastCloudStrings.current['vendors'] = JSON.stringify(vendors);
+          lastCloudStrings.current['incomingHeaders'] = JSON.stringify(incomingHeaders);
+          lastCloudStrings.current['rejects'] = JSON.stringify(rejects);
+          lastCloudStrings.current['putAways'] = JSON.stringify(putAways);
+          lastCloudStrings.current['outboundHeaders'] = JSON.stringify(outboundHeaders);
+          lastCloudStrings.current['stockOpnames'] = JSON.stringify(stockOpnames);
+          lastCloudStrings.current['mutasis'] = JSON.stringify(mutasis);
+          lastCloudStrings.current['kartuStocks'] = JSON.stringify(kartuStocks);
+          lastCloudStrings.current['categories'] = JSON.stringify(categories);
+          lastCloudStrings.current['units'] = JSON.stringify(units);
+          lastCloudStrings.current['zones'] = JSON.stringify(zones);
+          lastCloudStrings.current['rolePermissions'] = JSON.stringify(rolePermissions);
+          lastCloudStrings.current['adminAuthorities'] = JSON.stringify(adminAuthorities);
+          lastCloudStrings.current['menuConfigs'] = JSON.stringify(menuConfigs);
+          lastCloudStrings.current['branding'] = JSON.stringify({ appLogoUrl, appTitle });
+        } else {
+          // If cloud has data, overwrite local states with the loaded cloud data
+          if (cloudMaterials.length > 0) setMaterials(cloudMaterials);
+          if (cloudUsers.length > 0) setUsers(cloudUsers);
+          if (cloudGedung.length > 0) setGedungList(cloudGedung);
+          if (cloudVendors.length > 0) setVendors(cloudVendors);
+          if (cloudIncoming.length > 0) setIncomingHeaders(cloudIncoming);
+          if (cloudRejects.length > 0) setRejects(cloudRejects);
+          if (cloudPutaway.length > 0) setPutAways(cloudPutaway);
+          if (cloudOutbound.length > 0) setOutboundHeaders(cloudOutbound);
+          if (cloudOpname.length > 0) setStockOpnames(cloudOpname);
+          if (cloudMutasi.length > 0) setMutasis(cloudMutasi);
+          if (cloudKartuStock.length > 0) setKartuStocks(cloudKartuStock);
+          if (cloudCategories.length > 0) setCategories(cloudCategories);
+          if (cloudUnits.length > 0) setUnits(cloudUnits);
+          if (cloudZones.length > 0) setZones(cloudZones);
+
+          lastCloudStrings.current['materials'] = JSON.stringify(cloudMaterials);
+          lastCloudStrings.current['users'] = JSON.stringify(cloudUsers);
+          lastCloudStrings.current['gedungList'] = JSON.stringify(cloudGedung);
+          lastCloudStrings.current['vendors'] = JSON.stringify(cloudVendors);
+          lastCloudStrings.current['incomingHeaders'] = JSON.stringify(cloudIncoming);
+          lastCloudStrings.current['rejects'] = JSON.stringify(cloudRejects);
+          lastCloudStrings.current['putAways'] = JSON.stringify(cloudPutaway);
+          lastCloudStrings.current['outboundHeaders'] = JSON.stringify(cloudOutbound);
+          lastCloudStrings.current['stockOpnames'] = JSON.stringify(cloudOpname);
+          lastCloudStrings.current['mutasis'] = JSON.stringify(cloudMutasi);
+          lastCloudStrings.current['kartuStocks'] = JSON.stringify(cloudKartuStock);
+          lastCloudStrings.current['categories'] = JSON.stringify(cloudCategories);
+          lastCloudStrings.current['units'] = JSON.stringify(cloudUnits);
+          lastCloudStrings.current['zones'] = JSON.stringify(cloudZones);
+
+          if (cloudPermissions.length > 0) {
+            const permDoc = cloudPermissions.find(p => p.id === 'v1');
+            if (permDoc) {
+              const { id, updatedAt, ...rest } = permDoc;
+              setRolePermissions(rest as any);
+              lastCloudStrings.current['rolePermissions'] = JSON.stringify(rest);
+            }
+          }
+          if (cloudAdminAuth.length > 0) {
+            const authDoc = cloudAdminAuth.find(a => a.id === 'v1');
+            if (authDoc) {
+              const { id, updatedAt, ...rest } = authDoc;
+              setAdminAuthorities(rest as any);
+              lastCloudStrings.current['adminAuthorities'] = JSON.stringify(rest);
+            }
+          }
+          if (cloudMenuConfigs.length > 0) {
+            const configDoc = cloudMenuConfigs.find(c => c.id === 'v1');
+            if (configDoc) {
+              const { id, updatedAt, ...rest } = configDoc;
+              setMenuConfigs(rest as any);
+              lastCloudStrings.current['menuConfigs'] = JSON.stringify(rest);
+            }
+          }
+          if (cloudBranding.length > 0) {
+            const brandingDoc = cloudBranding.find(b => b.id === 'v1');
+            if (brandingDoc) {
+              const { id, updatedAt, ...rest } = brandingDoc;
+              if (brandingDoc.appLogoUrl !== undefined) setAppLogoUrl(brandingDoc.appLogoUrl);
+              if (brandingDoc.appTitle !== undefined) setAppTitle(brandingDoc.appTitle);
+              lastCloudStrings.current['branding'] = JSON.stringify(rest);
+            }
+          }
         }
 
-        // If cloud has data, overwrite local states with the loaded cloud data
-        if (cloudMaterials.length > 0) setMaterials(cloudMaterials);
-        if (cloudUsers.length > 0) setUsers(cloudUsers);
-        if (cloudGedung.length > 0) setGedungList(cloudGedung);
-        if (cloudVendors.length > 0) setVendors(cloudVendors);
-        if (cloudIncoming.length > 0) setIncomingHeaders(cloudIncoming);
-        if (cloudRejects.length > 0) setRejects(cloudRejects);
-        if (cloudPutaway.length > 0) setPutAways(cloudPutaway);
-        if (cloudOutbound.length > 0) setOutboundHeaders(cloudOutbound);
-        if (cloudOpname.length > 0) setStockOpnames(cloudOpname);
-        if (cloudMutasi.length > 0) setMutasis(cloudMutasi);
-        if (cloudKartuStock.length > 0) setKartuStocks(cloudKartuStock);
-        if (cloudCategories.length > 0) setCategories(cloudCategories);
-        if (cloudUnits.length > 0) setUnits(cloudUnits);
-        if (cloudZones.length > 0) setZones(cloudZones);
+        // Setup real-time listeners
+        const collectionsToListen = [
+          { name: 'materials', setter: setMaterials },
+          { name: 'users', setter: setUsers },
+          { name: 'gedungList', setter: setGedungList },
+          { name: 'vendors', setter: setVendors },
+          { name: 'incomingHeaders', setter: setIncomingHeaders },
+          { name: 'rejects', setter: setRejects },
+          { name: 'putAways', setter: setPutAways },
+          { name: 'outboundHeaders', setter: setOutboundHeaders },
+          { name: 'stockOpnames', setter: setStockOpnames },
+          { name: 'mutasis', setter: setMutasis },
+          { name: 'kartuStocks', setter: setKartuStocks },
+          { name: 'categories', setter: setCategories },
+          { name: 'units', setter: setUnits },
+          { name: 'zones', setter: setZones },
+        ];
 
-        if (cloudPermissions.length > 0) {
-          const permDoc = cloudPermissions.find(p => p.id === 'v1');
-          if (permDoc) {
-            const { id, updatedAt, ...rest } = permDoc;
-            setRolePermissions(rest as any);
+        collectionsToListen.forEach(({ name, setter }) => {
+          const unsub = onSnapshot(collection(db, name), (snapshot) => {
+            const items: any[] = [];
+            snapshot.forEach((doc) => {
+              items.push({ id: doc.id, ...doc.data() });
+            });
+            const itemsStr = JSON.stringify(items);
+            if (lastCloudStrings.current[name] !== itemsStr) {
+              lastCloudStrings.current[name] = itemsStr;
+              setter(items);
+            }
+          }, (error) => {
+            console.error(`Error onSnapshot for ${name}:`, error);
+          });
+          unsubscribersRef.current.push(unsub);
+        });
+
+        const singleDocs = [
+          { name: 'rolePermissions', docId: 'v1', setter: setRolePermissions },
+          { name: 'adminAuthorities', docId: 'v1', setter: setAdminAuthorities },
+          { name: 'menuConfigs', docId: 'v1', setter: setMenuConfigs },
+        ];
+
+        singleDocs.forEach(({ name, docId, setter }) => {
+          const unsub = onSnapshot(doc(db, name, docId), (snapshot) => {
+            if (snapshot.exists()) {
+              const { id, updatedAt, ...rest } = snapshot.data() as any;
+              const restStr = JSON.stringify(rest);
+              if (lastCloudStrings.current[name] !== restStr) {
+                lastCloudStrings.current[name] = restStr;
+                setter(rest as any);
+              }
+            }
+          }, (error) => {
+            console.error(`Error onSnapshot for ${name}/${docId}:`, error);
+          });
+          unsubscribersRef.current.push(unsub);
+        });
+
+        const unsubBranding = onSnapshot(doc(db, 'branding', 'v1'), (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            if (data) {
+              const brandingData = { appLogoUrl: data.appLogoUrl, appTitle: data.appTitle };
+              const brandingStr = JSON.stringify(brandingData);
+              if (lastCloudStrings.current['branding'] !== brandingStr) {
+                lastCloudStrings.current['branding'] = brandingStr;
+                if (data.appLogoUrl !== undefined) setAppLogoUrl(data.appLogoUrl);
+                if (data.appTitle !== undefined) setAppTitle(data.appTitle);
+              }
+            }
           }
-        }
-        if (cloudAdminAuth.length > 0) {
-          const authDoc = cloudAdminAuth.find(a => a.id === 'v1');
-          if (authDoc) {
-            const { id, updatedAt, ...rest } = authDoc;
-            setAdminAuthorities(rest as any);
-          }
-        }
-        if (cloudMenuConfigs.length > 0) {
-          const configDoc = cloudMenuConfigs.find(c => c.id === 'v1');
-          if (configDoc) {
-            const { id, updatedAt, ...rest } = configDoc;
-            setMenuConfigs(rest as any);
-          }
-        }
-        if (cloudBranding.length > 0) {
-          const brandingDoc = cloudBranding.find(b => b.id === 'v1');
-          if (brandingDoc) {
-            if (brandingDoc.appLogoUrl !== undefined) setAppLogoUrl(brandingDoc.appLogoUrl);
-            if (brandingDoc.appTitle !== undefined) setAppTitle(brandingDoc.appTitle);
-          }
-        }
+        }, (error) => {
+          console.error('Error onSnapshot for branding/v1:', error);
+        });
+        unsubscribersRef.current.push(unsubBranding);
 
         setFirebaseSyncStatus('synced');
-        showNotification('Database Cloud Aktif', 'Koneksi Firestore Berhasil! Data Anda sekarang tersinkronisasi di Cloud.', 'success', 'Sistem');
       } catch (err) {
         console.error('Failed to sync with Firebase Firestore:', err);
         setFirebaseSyncStatus('error');
@@ -367,6 +516,11 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     loadAllFromCloud();
+
+    return () => {
+      unsubscribersRef.current.forEach(unsub => unsub());
+      unsubscribersRef.current = [];
+    };
   }, []);
 
   useEffect(() => {
@@ -404,7 +558,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     menuName: ''
   });
 
-  const showNotification = (
+  const showNotification = React.useCallback((
     title: string,
     message: string,
     type: 'success' | 'info' | 'warning' | 'error' = 'success',
@@ -417,11 +571,11 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type,
       menuName
     });
-  };
+  }, []);
 
-  const closeNotification = () => {
+  const closeNotification = React.useCallback(() => {
     setNotification(prev => ({ ...prev, show: false }));
-  };
+  }, []);
 
   // Save changes to localStorage
   useEffect(() => {
@@ -447,91 +601,159 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sync to Firestore on changes
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('materials', materials);
+    const currentStr = JSON.stringify(materials);
+    const oldStr = lastCloudStrings.current['materials'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['materials'] = currentStr;
+    syncCollectionIncrementally('materials', materials, oldStr);
   }, [materials, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('users', users);
+    const currentStr = JSON.stringify(users);
+    const oldStr = lastCloudStrings.current['users'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['users'] = currentStr;
+    syncCollectionIncrementally('users', users, oldStr);
   }, [users, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('gedungList', gedungList);
+    const currentStr = JSON.stringify(gedungList);
+    const oldStr = lastCloudStrings.current['gedungList'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['gedungList'] = currentStr;
+    syncCollectionIncrementally('gedungList', gedungList, oldStr);
   }, [gedungList, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('vendors', vendors);
+    const currentStr = JSON.stringify(vendors);
+    const oldStr = lastCloudStrings.current['vendors'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['vendors'] = currentStr;
+    syncCollectionIncrementally('vendors', vendors, oldStr);
   }, [vendors, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('incomingHeaders', incomingHeaders);
+    const currentStr = JSON.stringify(incomingHeaders);
+    const oldStr = lastCloudStrings.current['incomingHeaders'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['incomingHeaders'] = currentStr;
+    syncCollectionIncrementally('incomingHeaders', incomingHeaders, oldStr);
   }, [incomingHeaders, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('rejects', rejects);
+    const currentStr = JSON.stringify(rejects);
+    const oldStr = lastCloudStrings.current['rejects'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['rejects'] = currentStr;
+    syncCollectionIncrementally('rejects', rejects, oldStr);
   }, [rejects, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('putAways', putAways);
+    const currentStr = JSON.stringify(putAways);
+    const oldStr = lastCloudStrings.current['putAways'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['putAways'] = currentStr;
+    syncCollectionIncrementally('putAways', putAways, oldStr);
   }, [putAways, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('outboundHeaders', outboundHeaders);
+    const currentStr = JSON.stringify(outboundHeaders);
+    const oldStr = lastCloudStrings.current['outboundHeaders'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['outboundHeaders'] = currentStr;
+    syncCollectionIncrementally('outboundHeaders', outboundHeaders, oldStr);
   }, [outboundHeaders, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('stockOpnames', stockOpnames);
+    const currentStr = JSON.stringify(stockOpnames);
+    const oldStr = lastCloudStrings.current['stockOpnames'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['stockOpnames'] = currentStr;
+    syncCollectionIncrementally('stockOpnames', stockOpnames, oldStr);
   }, [stockOpnames, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('mutasis', mutasis);
+    const currentStr = JSON.stringify(mutasis);
+    const oldStr = lastCloudStrings.current['mutasis'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['mutasis'] = currentStr;
+    syncCollectionIncrementally('mutasis', mutasis, oldStr);
   }, [mutasis, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('kartuStocks', kartuStocks);
+    const currentStr = JSON.stringify(kartuStocks);
+    const oldStr = lastCloudStrings.current['kartuStocks'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['kartuStocks'] = currentStr;
+    syncCollectionIncrementally('kartuStocks', kartuStocks, oldStr);
   }, [kartuStocks, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('categories', categories);
+    const currentStr = JSON.stringify(categories);
+    const oldStr = lastCloudStrings.current['categories'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['categories'] = currentStr;
+    syncCollectionIncrementally('categories', categories, oldStr);
   }, [categories, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('units', units);
+    const currentStr = JSON.stringify(units);
+    const oldStr = lastCloudStrings.current['units'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['units'] = currentStr;
+    syncCollectionIncrementally('units', units, oldStr);
   }, [units, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
-    syncCollectionToFirestore('zones', zones);
+    const currentStr = JSON.stringify(zones);
+    const oldStr = lastCloudStrings.current['zones'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['zones'] = currentStr;
+    syncCollectionIncrementally('zones', zones, oldStr);
   }, [zones, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
+    const currentStr = JSON.stringify(rolePermissions);
+    if (currentStr === lastCloudStrings.current['rolePermissions']) return;
+    lastCloudStrings.current['rolePermissions'] = currentStr;
     saveToFirestore('rolePermissions', 'v1', rolePermissions);
   }, [rolePermissions, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
+    const currentStr = JSON.stringify(adminAuthorities);
+    if (currentStr === lastCloudStrings.current['adminAuthorities']) return;
+    lastCloudStrings.current['adminAuthorities'] = currentStr;
     saveToFirestore('adminAuthorities', 'v1', adminAuthorities);
   }, [adminAuthorities, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
+    const currentStr = JSON.stringify(menuConfigs);
+    if (currentStr === lastCloudStrings.current['menuConfigs']) return;
+    lastCloudStrings.current['menuConfigs'] = currentStr;
     saveToFirestore('menuConfigs', 'v1', menuConfigs);
   }, [menuConfigs, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
+    const currentStr = JSON.stringify({ appLogoUrl, appTitle });
+    if (currentStr === lastCloudStrings.current['branding']) return;
+    lastCloudStrings.current['branding'] = currentStr;
     saveToFirestore('branding', 'v1', { appLogoUrl, appTitle });
   }, [appLogoUrl, appTitle, firebaseSyncStatus]);
 
@@ -623,10 +845,46 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Handlers
-  const addMaterial = (m: Omit<Material, 'id' | 'currentStock'> & { id?: string }) => {
-    const nextId = m.id && m.id.trim() ? m.id.trim().toUpperCase() : `MAT-${String(materials.length + 1).padStart(3, '0')}`;
-    const newMat: Material = { ...m, id: nextId, currentStock: 0 };
+  const addMaterial = (m: Omit<Material, 'id' | 'currentStock'> & { id?: string; currentStock?: number }) => {
+    let nextId = m.id && m.id.trim() ? m.id.trim().toUpperCase() : '';
+    if (!nextId) {
+      const maxId = materials.reduce((max, mat) => {
+        const match = mat.id.match(/^MAT-(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          return num > max ? num : max;
+        }
+        return max;
+      }, 0);
+
+      let nextIdNum = maxId + 1;
+      nextId = `MAT-${String(nextIdNum).padStart(3, '0')}`;
+      while (materials.some(mat => mat.id === nextId)) {
+        nextIdNum++;
+        nextId = `MAT-${String(nextIdNum).padStart(3, '0')}`;
+      }
+    }
+
+    const initialStock = m.currentStock || 0;
+    const newMat: Material = { ...m, id: nextId, currentStock: initialStock };
     setMaterials(prev => [...prev, newMat]);
+
+    if (initialStock > 0) {
+      const newEntry: KartuStockEntry = {
+        id: `KS-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+        tanggal: today,
+        materialId: nextId,
+        jenisTransaksi: 'Incoming',
+        refNo: 'SALDO-AWAL',
+        masuk: initialStock,
+        keluar: 0,
+        saldo: initialStock,
+        keterangan: 'Saldo Awal Material Baru',
+        lokasi: m.lokasiDefaut || 'Gedung A1'
+      };
+      setKartuStocks(prev => [newEntry, ...prev]);
+    }
+
     showNotification('Data Material Berhasil Disimpan', `Material ID: ${nextId} (${m.namaBarang}) telah tersimpan ke Master Data.`, 'success', 'Master Data Barang');
   };
 
@@ -635,13 +893,31 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Data Material Berhasil Perbarui', `Perubahan data material ${id} berhasil disimpan.`, 'success', 'Master Data Barang');
   };
 
-  const deleteMaterial = (id: string) => {
+  const deleteMaterial = async (id: string) => {
     setMaterials(prev => prev.filter(item => item.id !== id));
+    await deleteFromFirestore('materials', id);
     showNotification('Data Material Dihapus', `Material ID ${id} telah dihapus dari sistem.`, 'info', 'Master Data Barang');
   };
 
   const addIncoming = (headerData: Omit<IncomingHeader, 'id' | 'noReceiving'>) => {
-    const nextNo = `REC-${new Date().getFullYear()}-${String(incomingHeaders.length + 1).padStart(3, '0')}`;
+    const currentYear = new Date().getFullYear();
+    const maxId = incomingHeaders.reduce((max, header) => {
+      const regex = new RegExp(`^REC-${currentYear}-(\\d+)$`);
+      const match = header.noReceiving.match(regex);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        return num > max ? num : max;
+      }
+      return max;
+    }, 0);
+
+    let nextIdNum = maxId + 1;
+    let nextNo = `REC-${currentYear}-${String(nextIdNum).padStart(3, '0')}`;
+    while (incomingHeaders.some(h => h.noReceiving === nextNo)) {
+      nextIdNum++;
+      nextNo = `REC-${currentYear}-${String(nextIdNum).padStart(3, '0')}`;
+    }
+
     const newHeader: IncomingHeader = {
       ...headerData,
       id: `INC-${Date.now()}`,
@@ -675,12 +951,17 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Build Kartu Stock entries synchronously based on materials state
     const newKartuEntries: KartuStockEntry[] = [];
+    
+    const localStockMap: Record<string, number> = {};
+    materials.forEach(m => {
+      localStockMap[m.id] = m.currentStock;
+    });
 
     headerData.details.forEach(detail => {
       if (detail.qtyDiterima > 0) {
-        const mat = materials.find(m => m.id === detail.materialId);
-        const currentStock = mat ? mat.currentStock : 0;
+        const currentStock = localStockMap[detail.materialId] !== undefined ? localStockMap[detail.materialId] : 0;
         const newStock = currentStock + detail.qtyDiterima;
+        localStockMap[detail.materialId] = newStock;
 
         newKartuEntries.push({
           id: `KS-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
@@ -699,9 +980,8 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Update Materials currentStock
     setMaterials(prev => prev.map(mat => {
-      const detail = headerData.details.find(d => d.materialId === mat.id && d.qtyDiterima > 0);
-      if (detail) {
-        return { ...mat, currentStock: mat.currentStock + detail.qtyDiterima };
+      if (localStockMap[mat.id] !== undefined) {
+        return { ...mat, currentStock: localStockMap[mat.id] };
       }
       return mat;
     }));
@@ -770,6 +1050,48 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addOutbound = (outboundData: Omit<OutboundHeader, 'id'>) => {
+    // Validate stock levels both globally and per-building
+    for (const detail of outboundData.details) {
+      if (detail.qty > 0) {
+        const mat = materials.find(m => m.id === detail.materialId);
+        if (!mat) {
+          showNotification(
+            'Material Tidak Ditemukan',
+            `Material ID ${detail.materialId} tidak ditemukan.`,
+            'error',
+            'Outbound Delivery'
+          );
+          return;
+        }
+
+        // 1. Check total stock
+        if (mat.currentStock < detail.qty) {
+          showNotification(
+            'Stok Tidak Cukup',
+            `Transaksi outbound dibatalkan karena total stok ${mat.namaBarang} tidak mencukupi (Tersedia: ${mat.currentStock} ${mat.satuan}, Diajukan: ${detail.qty} ${mat.satuan}).`,
+            'error',
+            'Outbound Delivery'
+          );
+          return;
+        }
+
+        // 2. Check specific building stock
+        const locationName = detail.gedungAsal || mat.lokasiDefaut || 'Gedung A1';
+        const buildingStocks = getMaterialStockByGedung(detail.materialId);
+        const stockInBuilding = buildingStocks[locationName] || 0;
+
+        if (stockInBuilding < detail.qty) {
+          showNotification(
+            'Gagal Proses - Stok Gedung Kurang',
+            `Transaksi outbound dibatalkan karena stok ${mat.namaBarang} di ${locationName} tidak mencukupi (Tersedia di gedung ini: ${stockInBuilding} ${mat.satuan}, Diajukan: ${detail.qty} ${mat.satuan}).`,
+            'error',
+            'Outbound Delivery'
+          );
+          return;
+        }
+      }
+    }
+
     const newOutbound: OutboundHeader = {
       ...outboundData,
       id: `OUT-${Date.now()}`
@@ -777,13 +1099,19 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOutboundHeaders(prev => [newOutbound, ...prev]);
 
     const newKartuEntries: KartuStockEntry[] = [];
+    
+    const localStockMap: Record<string, number> = {};
+    materials.forEach(m => {
+      localStockMap[m.id] = m.currentStock;
+    });
 
     outboundData.details.forEach(detail => {
       if (detail.qty > 0) {
-        const mat = materials.find(m => m.id === detail.materialId);
-        const currentStock = mat ? mat.currentStock : 0;
+        const currentStock = localStockMap[detail.materialId] !== undefined ? localStockMap[detail.materialId] : 0;
         const newStock = Math.max(0, currentStock - detail.qty);
+        localStockMap[detail.materialId] = newStock;
 
+        const mat = materials.find(m => m.id === detail.materialId);
         newKartuEntries.push({
           id: `KS-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
           tanggal: outboundData.tanggal,
@@ -799,10 +1127,10 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
+    // Update Materials currentStock
     setMaterials(prev => prev.map(mat => {
-      const detail = outboundData.details.find(d => d.materialId === mat.id && d.qty > 0);
-      if (detail) {
-        return { ...mat, currentStock: Math.max(0, mat.currentStock - detail.qty) };
+      if (localStockMap[mat.id] !== undefined) {
+        return { ...mat, currentStock: localStockMap[mat.id] };
       }
       return mat;
     }));
@@ -876,13 +1204,41 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addUser = (u: Omit<User, 'id'>) => {
-    const newUser: User = { ...u, id: `USR-${users.length + 1}` };
+    // Validasi duplikasi username
+    const usernameExists = users.some(user => user.username.trim().toLowerCase() === u.username.trim().toLowerCase());
+    if (usernameExists) {
+      showNotification(
+        'Username Sudah Digunakan',
+        `Gagal menambahkan pengguna. Username "${u.username}" sudah terdaftar di sistem. Silakan gunakan username yang berbeda.`,
+        'error',
+        'Master Pengguna'
+      );
+      return;
+    }
+
+    const maxId = users.reduce((max, user) => {
+      const match = user.id.match(/^USR-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        return num > max ? num : max;
+      }
+      return max;
+    }, 0);
+
+    let nextIdNum = maxId + 1;
+    let nextId = `USR-${nextIdNum}`;
+    while (users.some(user => user.id === nextId)) {
+      nextIdNum++;
+      nextId = `USR-${nextIdNum}`;
+    }
+
+    const newUser: User = { ...u, username: u.username.trim(), id: nextId };
     setUsers(prev => [...prev, newUser]);
 
     showNotification('Pengguna Baru Terdaftar', `Pengguna ${u.nama} dengan role ${u.role} berhasil ditambahkan.`, 'success', 'Master Pengguna');
   };
 
-  const deleteUser = (id: string) => {
+  const deleteUser = async (id: string) => {
     if (currentUser.id === id) {
       showNotification('Gagal Menghapus User', 'Anda tidak dapat menghapus akun pengguna yang sedang login.', 'error', 'Master Pengguna');
       return;
@@ -893,19 +1249,37 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     const targetUser = users.find(u => u.id === id);
     setUsers(prev => prev.filter(u => u.id !== id));
+    await deleteFromFirestore('users', id);
     showNotification('Pengguna Dihapus', `Akun pengguna ${targetUser?.nama || id} telah dihapus dari sistem.`, 'info', 'Master Pengguna');
   };
 
   const addVendor = (v: Omit<Vendor, 'id'>) => {
-    const newVendor: Vendor = { ...v, id: `VND-${String(vendors.length + 1).padStart(2, '0')}` };
+    const maxId = vendors.reduce((max, vendor) => {
+      const match = vendor.id.match(/^VND-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        return num > max ? num : max;
+      }
+      return max;
+    }, 0);
+
+    let nextIdNum = maxId + 1;
+    let nextId = `VND-${String(nextIdNum).padStart(2, '0')}`;
+    while (vendors.some(vendor => vendor.id === nextId)) {
+      nextIdNum++;
+      nextId = `VND-${String(nextIdNum).padStart(2, '0')}`;
+    }
+
+    const newVendor: Vendor = { ...v, id: nextId };
     setVendors(prev => [...prev, newVendor]);
 
     showNotification('Master Vendor Disimpan', `Vendor ${v.namaVendor} berhasil ditambahkan.`, 'success', 'Master Vendor');
   };
 
-  const deleteVendor = (id: string) => {
+  const deleteVendor = async (id: string) => {
     const targetVendor = vendors.find(v => v.id === id);
     setVendors(prev => prev.filter(v => v.id !== id));
+    await deleteFromFirestore('vendors', id);
     showNotification('Vendor Dihapus', `Master Vendor ${targetVendor?.namaVendor || id} berhasil dihapus.`, 'info', 'Master Vendor');
   };
 
@@ -916,9 +1290,10 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Lokasi Gudang Disimpan', `Gedung ${g.nama} dengan kapasitas ${g.kapasitasPallet} Pallet telah ditambahkan.`, 'success', 'Layout Gudang');
   };
 
-  const deleteGedung = (id: string) => {
+  const deleteGedung = async (id: string) => {
     const targetGedung = gedungList.find(g => g.id === id);
     setGedungList(prev => prev.filter(g => g.id !== id));
+    await deleteFromFirestore('gedungList', id);
     showNotification('Gedung Dihapus', `Master Gedung ${targetGedung?.nama || id} berhasil dihapus dari sistem.`, 'info', 'Layout Gudang');
   };
 
@@ -933,9 +1308,10 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Kategori Diperbarui', `Kategori berhasil diperbarui.`, 'success', 'Master Kategori');
   };
 
-  const deleteCategory = (id: string) => {
+  const deleteCategory = async (id: string) => {
     const target = categories.find(cat => cat.id === id);
     setCategories(prev => prev.filter(item => item.id !== id));
+    await deleteFromFirestore('categories', id);
     showNotification('Kategori Dihapus', `Kategori ${target?.nama || id} berhasil dihapus.`, 'info', 'Master Kategori');
   };
 
@@ -950,10 +1326,209 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Satuan Diperbarui', `Satuan berhasil diperbarui.`, 'success', 'Master Satuan');
   };
 
-  const deleteUnit = (id: string) => {
+  const deleteUnit = async (id: string) => {
     const target = units.find(item => item.id === id);
     setUnits(prev => prev.filter(item => item.id !== id));
+    await deleteFromFirestore('units', id);
     showNotification('Satuan Dihapus', `Satuan ${target?.nama || id} berhasil dihapus.`, 'info', 'Master Satuan');
+  };
+
+  const deleteIncoming = async (id: string) => {
+    const header = incomingHeaders.find(h => h.id === id);
+    if (!header) return;
+
+    // 1. Revert stock of materials
+    setMaterials(prev => prev.map(mat => {
+      const matchedDetail = header.details.find(d => d.materialId === mat.id);
+      if (matchedDetail) {
+        return {
+          ...mat,
+          currentStock: Math.max(0, mat.currentStock - matchedDetail.qtyDiterima)
+        };
+      }
+      return mat;
+    }));
+
+    // 2. Remove related kartu stock entries
+    const relatedKartu = kartuStocks.filter(ks => ks.refNo === header.noReceiving);
+    for (const ks of relatedKartu) {
+      await deleteFromFirestore('kartuStocks', ks.id);
+    }
+    setKartuStocks(prev => prev.filter(ks => ks.refNo !== header.noReceiving));
+
+    // 3. Remove related rejects (if any)
+    const relatedRejects = rejects.filter(r => r.poPembelian === header.nomorPO && r.vendor === header.vendor);
+    for (const r of relatedRejects) {
+      await deleteFromFirestore('rejects', r.id);
+    }
+    setRejects(prev => prev.filter(r => !(r.poPembelian === header.nomorPO && r.vendor === header.vendor)));
+
+    // 4. Revert palletTerisi in gedungList
+    setGedungList(prevGedungList => {
+      let updated = [...prevGedungList];
+      const validDetails = header.details.filter(d => d.qtyDiterima > 0);
+      const totalQty = validDetails.reduce((sum, d) => sum + d.qtyDiterima, 0);
+      const totalPallets = header.palletInCount > 0 ? header.palletInCount : validDetails.length;
+
+      validDetails.forEach(detail => {
+        const targetGedungName = detail.lokasiSimpan || 'Gedung A1';
+        const palShare = totalQty > 0 
+          ? Math.max(1, Math.round((detail.qtyDiterima / totalQty) * totalPallets))
+          : 1;
+
+        updated = updated.map(g => {
+          if (g.nama.toLowerCase() === targetGedungName.toLowerCase() || g.id === targetGedungName) {
+            const newTerisi = Math.max(0, g.palletTerisi - palShare);
+            return { ...g, palletTerisi: newTerisi };
+          }
+          return g;
+        });
+      });
+      return updated;
+    });
+
+    // 5. Delete the incoming header itself
+    setIncomingHeaders(prev => prev.filter(h => h.id !== id));
+    await deleteFromFirestore('incomingHeaders', id);
+
+    showNotification('Incoming Dihapus', `Transaksi Incoming #${header.noReceiving} berhasil dihapus & stock disesuaikan.`, 'info', 'Pusat Laporan');
+  };
+
+  const deleteOutbound = async (id: string) => {
+    const header = outboundHeaders.find(o => o.id === id);
+    if (!header) return;
+
+    // 1. Revert stock of materials
+    setMaterials(prev => prev.map(mat => {
+      const matchedDetail = header.details.find(d => d.materialId === mat.id);
+      if (matchedDetail) {
+        return {
+          ...mat,
+          currentStock: mat.currentStock + matchedDetail.qty
+        };
+      }
+      return mat;
+    }));
+
+    // 2. Remove related kartu stock entries
+    const relatedKartu = kartuStocks.filter(ks => ks.refNo === header.nomorDOSJ);
+    for (const ks of relatedKartu) {
+      await deleteFromFirestore('kartuStocks', ks.id);
+    }
+    setKartuStocks(prev => prev.filter(ks => ks.refNo !== header.nomorDOSJ));
+
+    // 3. Delete the outbound header
+    setOutboundHeaders(prev => prev.filter(o => o.id !== id));
+    await deleteFromFirestore('outboundHeaders', id);
+
+    showNotification('Outbound Dihapus', `Transaksi Outbound #${header.nomorDOSJ} berhasil dihapus & stock dikembalikan.`, 'info', 'Pusat Laporan');
+  };
+
+  const deleteReject = async (id: string) => {
+    setRejects(prev => prev.filter(r => r.id !== id));
+    await deleteFromFirestore('rejects', id);
+    showNotification('Reject Dihapus', `Data Reject #${id} berhasil dihapus.`, 'info', 'Pusat Laporan');
+  };
+
+  const deleteStockOpname = async (id: string) => {
+    const so = stockOpnames.find(s => s.id === id);
+    if (!so) return;
+
+    if (so.status === 'Selesai') {
+      setMaterials(prev => prev.map(mat => {
+        if (mat.id === so.materialId) {
+          return {
+            ...mat,
+            currentStock: so.qtySistem
+          };
+        }
+        return mat;
+      }));
+
+      const relatedKartu = kartuStocks.filter(ks => ks.refNo === so.id);
+      for (const ks of relatedKartu) {
+        await deleteFromFirestore('kartuStocks', ks.id);
+      }
+      setKartuStocks(prev => prev.filter(ks => ks.refNo !== so.id));
+    }
+
+    setStockOpnames(prev => prev.filter(s => s.id !== id));
+    await deleteFromFirestore('stockOpnames', id);
+
+    showNotification('Stock Opname Dihapus', `Data Opname #${id} berhasil dihapus.`, 'info', 'Pusat Laporan');
+  };
+
+  const deleteKartuStock = async (id: string) => {
+    setKartuStocks(prev => prev.filter(ks => ks.id !== id));
+    await deleteFromFirestore('kartuStocks', id);
+    showNotification('Kartu Stock Dihapus', `Entry Kartu Stock #${id} berhasil dihapus.`, 'info', 'Pusat Laporan');
+  };
+
+  const getMaterialStockByGedung = (materialId: string): Record<string, number> => {
+    const mat = materials.find(m => m.id === materialId);
+    if (!mat) return {};
+
+    const stocks: Record<string, number> = {};
+    gedungList.forEach(g => {
+      stocks[g.nama] = 0;
+    });
+
+    const defaultLoc = mat.lokasiDefaut || 'Gedung A1';
+
+    // 1. Process initial stock (SALDO-AWAL) from kartuStocks
+    kartuStocks.forEach(ks => {
+      if (ks.materialId === materialId && ks.refNo === 'SALDO-AWAL' && ks.masuk > 0) {
+        const loc = ks.lokasi || defaultLoc;
+        if (stocks[loc] !== undefined) {
+          stocks[loc] += ks.masuk;
+        }
+      }
+    });
+
+    // 2. Process all Incoming receiving
+    incomingHeaders.forEach(h => {
+      h.details.forEach(d => {
+        if (d.materialId === materialId && d.qtyDiterima > 0) {
+          const loc = d.lokasiSimpan || defaultLoc;
+          if (stocks[loc] !== undefined) {
+            stocks[loc] += d.qtyDiterima;
+          }
+        }
+      });
+    });
+
+    // 3. Process all Outbound shipping
+    outboundHeaders.forEach(h => {
+      h.details.forEach(d => {
+        if (d.materialId === materialId && d.qty > 0) {
+          const loc = d.gedungAsal || defaultLoc;
+          if (stocks[loc] !== undefined) {
+            stocks[loc] = Math.max(0, stocks[loc] - d.qty);
+          }
+        }
+      });
+    });
+
+    // 4. Process Mutasi
+    mutasis.forEach(m => {
+      if (m.materialId === materialId && m.qty > 0) {
+        if (stocks[m.dari] !== undefined) {
+          stocks[m.dari] = Math.max(0, stocks[m.dari] - m.qty);
+        }
+        if (stocks[m.ke] !== undefined) {
+          stocks[m.ke] += m.qty;
+        }
+      }
+    });
+
+    // 5. Adjust based on overall currentStock fallback to guarantee consistency
+    const totalCalculated = Object.values(stocks).reduce((sum, s) => sum + s, 0);
+    if (totalCalculated < mat.currentStock) {
+      const diff = mat.currentStock - totalCalculated;
+      stocks[defaultLoc] = (stocks[defaultLoc] || 0) + diff;
+    }
+
+    return stocks;
   };
 
   const resetToDefaultData = () => {
@@ -1034,12 +1609,20 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addUnit,
       updateUnit,
       deleteUnit,
+      deleteIncoming,
+      deleteOutbound,
+      deleteReject,
+      deleteStockOpname,
+      deleteKartuStock,
       updateRolePermission,
       updateAdminAuthority,
       updateMenuConfig,
       checkPermission,
       resetToDefaultData,
-      firebaseSyncStatus
+      getMaterialStockByGedung,
+      firebaseSyncStatus,
+      theme,
+      toggleTheme
     }}>
       {children}
     </WmsContext.Provider>

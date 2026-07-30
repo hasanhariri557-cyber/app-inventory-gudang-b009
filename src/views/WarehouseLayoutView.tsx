@@ -4,42 +4,28 @@ import { useWms } from '../context/WmsContext';
 import { Gedung } from '../types';
 
 export const WarehouseLayoutView: React.FC = () => {
-  const { gedungList, materials, incomingHeaders } = useWms();
+  const { gedungList, materials, getMaterialStockByGedung } = useWms();
   const [selectedGedung, setSelectedGedung] = useState<Gedung | null>(gedungList[0] || null);
 
-  // Filter materials stored in selected Gedung (by default location or by incoming transactions lokasiSimpan)
-  const storedMaterialMap = new Map<string, { id: string; namaBarang: string; currentStock: number; satuan: string; kategori: string }>();
+  // Filter materials stored in selected Gedung with stock > 0 in this Gedung
+  const storedMaterials: { id: string; namaBarang: string; currentStock: number; buildingStock: number; satuan: string; kategori: string }[] = [];
 
-  materials.forEach(m => {
-    if (m.lokasiDefaut === selectedGedung?.nama) {
-      storedMaterialMap.set(m.id, {
-        id: m.id,
-        namaBarang: m.namaBarang,
-        currentStock: m.currentStock,
-        satuan: m.satuan,
-        kategori: m.kategori,
-      });
-    }
-  });
-
-  incomingHeaders.forEach(h => {
-    h.details.forEach(d => {
-      if (d.lokasiSimpan === selectedGedung?.nama && d.qtyDiterima > 0) {
-        const mat = materials.find(m => m.id === d.materialId);
-        const stock = mat ? mat.currentStock : d.qtyDiterima;
-        const satuan = mat ? mat.satuan : 'PCS';
-        storedMaterialMap.set(d.materialId, {
-          id: d.materialId,
-          namaBarang: d.namaBarang,
-          currentStock: stock,
-          satuan: satuan,
-          kategori: mat ? mat.kategori : 'Material',
+  if (selectedGedung) {
+    materials.forEach(m => {
+      const bStocks = getMaterialStockByGedung(m.id);
+      const stockInBuilding = bStocks[selectedGedung.nama] || 0;
+      if (stockInBuilding > 0) {
+        storedMaterials.push({
+          id: m.id,
+          namaBarang: m.namaBarang,
+          currentStock: m.currentStock,
+          buildingStock: stockInBuilding,
+          satuan: m.satuan,
+          kategori: m.kategori,
         });
       }
     });
-  });
-
-  const storedMaterials = Array.from(storedMaterialMap.values());
+  }
 
   const getOccupancyColor = (terisi: number, kapasitas: number) => {
     const ratio = terisi / kapasitas;
@@ -176,14 +162,14 @@ export const WarehouseLayoutView: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-slate-900 truncate">{m.namaBarang}</p>
-                      <p className="text-[10px] text-slate-500">{m.id} • {m.currentStock} {m.satuan}</p>
+                      <p className="text-[10px] text-slate-500">{m.id} • <span className="font-semibold text-indigo-600">{m.buildingStock} {m.satuan}</span></p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-xs text-slate-500">
-                Belum ada material/barang yang diset default disimpan di {selectedGedung.nama}.
+                Tidak ada barang dengan stok aktif yang tersimpan di {selectedGedung.nama}.
               </div>
             )}
           </div>

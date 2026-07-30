@@ -88,6 +88,7 @@ export function generateSuratJalanPDF(outbound: {
   tanggal: string;
   ekspedisi: string;
   palletOutCount: number;
+  noKendaraan?: string;
   details: any[];
 }) {
   const doc = new jsPDF();
@@ -115,8 +116,9 @@ export function generateSuratJalanPDF(outbound: {
   doc.text(`Tanggal: ${outbound.tanggal}`, 14, 46);
 
   doc.text(`Ekspedisi: ${outbound.ekspedisi}`, 120, 34);
-  doc.text(`Total Pallet Out: ${outbound.palletOutCount} Pallet`, 120, 40);
-  doc.text(`Status: OUTBOUND COMPLETED`, 120, 46);
+  doc.text(`No. Kendaraan: ${outbound.noKendaraan || '-'}`, 120, 40);
+  doc.text(`Total Pallet Out: ${outbound.palletOutCount} Pallet`, 120, 46);
+  doc.text(`Status: OUTBOUND COMPLETED`, 120, 52);
 
   // Table Details
   const tableData = outbound.details.map((d, index) => [
@@ -130,7 +132,7 @@ export function generateSuratJalanPDF(outbound: {
   ]);
 
   autoTable(doc, {
-    startY: 54,
+    startY: 60,
     head: [['No', 'Material ID', 'Nama Barang', 'Qty', 'Satuan', 'PIC Checker', 'Keterangan']],
     body: tableData,
     theme: 'striped',

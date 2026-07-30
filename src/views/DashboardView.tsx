@@ -149,7 +149,15 @@ export const DashboardView: React.FC = () => {
   // 5 Transaksi Terakhir (Otomatis dari Kartu Stock / Activity)
   const recentActivities = React.useMemo(() => {
     if (!kartuStocks || kartuStocks.length === 0) return [];
-    let list = kartuStocks;
+    let list = [...kartuStocks];
+    
+    // Sort descending by tanggal, then by ID to get the latest transactions first
+    list.sort((a, b) => {
+      const dateCompare = b.tanggal.localeCompare(a.tanggal);
+      if (dateCompare !== 0) return dateCompare;
+      return b.id.localeCompare(a.id);
+    });
+
     if (kategoriFilter !== 'Semua') {
       list = list.filter(ks => {
         const mat = materials.find(m => m.id === ks.materialId);
@@ -224,7 +232,7 @@ export const DashboardView: React.FC = () => {
       minute: '2-digit'
     });
 
-    const message = `*RINGKASAN DASHBOARD REAL-TIME B009* 📦
+    const message = `*RINGKASAN DASHBOARD REAL-TIME GUDANG B009* 📦
 📅 *Waktu:* ${dateStr}
 🏷️ *Filter Kategori:* ${kategoriFilter}
 
@@ -302,10 +310,10 @@ _Dikirim dari Sistem WMS Pergudangan_`;
               <div className="p-2 bg-blue-600/30 text-blue-200 border border-blue-400/30 backdrop-blur-md rounded-xl">
                 <LayoutDashboard className="w-5 h-5 text-blue-300" />
               </div>
-              <span>Dashboard Real-Time WMS B009</span>
+              <span>Dashboard Gudang Pancawati B009</span>
             </h1>
             <p className="text-xs text-blue-100/80 mt-1">
-              Ringkasan status operasional gudang pancawati, dan akurasi stok hari ini.
+              Ringkasan status semua operasional gudang pancawati, dan akurasi stok hari ini.
             </p>
           </div>
 
@@ -394,9 +402,9 @@ _Dikirim dari Sistem WMS Pergudangan_`;
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px]">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px]">
               <tr>
                 <th className="p-2.5">No. Referensi</th>
                 <th className="p-2.5">Tanggal</th>
@@ -567,9 +575,9 @@ _Dikirim dari Sistem WMS Pergudangan_`;
             <span className="text-xs text-slate-500 font-medium">Peringatan Pengadaan</span>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
             <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px]">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px]">
                 <tr>
                   <th className="p-2.5">Material ID</th>
                   <th className="p-2.5">Nama Barang</th>
@@ -613,9 +621,9 @@ _Dikirim dari Sistem WMS Pergudangan_`;
             <span className="text-xs text-slate-500 font-medium">Verifikasi Fisik</span>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
             <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px]">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px]">
                 <tr>
                   <th className="p-2.5">Material ID</th>
                   <th className="p-2.5">Nama Barang</th>

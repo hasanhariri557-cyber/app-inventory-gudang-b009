@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WmsProvider, useWms } from './context/WmsContext';
 import { MenuKey } from './types';
 
@@ -35,12 +35,49 @@ const MENU_TITLES: Record<MenuKey, string> = {
 };
 
 function MainApp() {
-  const { checkPermission, currentUser, isLoggedIn } = useWms();
+  const { checkPermission, currentUser, isLoggedIn, setIsLoggedIn, showNotification } = useWms();
   const [activeMenu, setActiveMenu] = useState<MenuKey>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Modals
   const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
+
+  // Auto logout after 5 minutes of inactivity
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    let timeoutId: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setIsLoggedIn(false);
+        showNotification(
+          'Sesi Berakhir Otomatis',
+          'Anda telah dikeluarkan otomatis setelah 5 menit tidak ada aktivitas demi keamanan sistem shift.',
+          'warning',
+          'Keamanan Sesi'
+        );
+      }, 5 * 60 * 1000); // 5 minutes
+    };
+
+    // User activity events to listen to
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    
+    events.forEach(event => {
+      window.addEventListener(event, resetTimer);
+    });
+
+    // Initialize timer
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach(event => {
+        window.removeEventListener(event, resetTimer);
+      });
+    };
+  }, [isLoggedIn, setIsLoggedIn, showNotification]);
 
   if (!isLoggedIn) {
     return (
@@ -83,7 +120,7 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col selection:bg-indigo-600 selection:text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col selection:bg-indigo-600 selection:text-white transition-colors duration-200">
       
       {/* Top Header Navbar */}
       <Navbar

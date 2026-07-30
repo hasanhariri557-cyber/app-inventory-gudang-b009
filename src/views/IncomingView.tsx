@@ -119,13 +119,22 @@ export const IncomingView: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showTodayOnly, setShowTodayOnly] = useState(true);
 
-  // Header Form State
-  const today = new Date().toISOString().split('T')[0];
+  // Timezone-safe local date YYYY-MM-DD
+  const getLocalDateString = () => {
+    const d = new Date();
+    const offset = d.getTimezoneOffset();
+    const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
+  };
+
+  const today = getLocalDateString();
+  const [filterDate, setFilterDate] = useState(today);
   const [tanggal, setTanggal] = useState(today);
-  const [vendor, setVendor] = useState(vendors[0]?.namaVendor || 'PT Mitra Packaging Nusantara');
-  const [nomorPO, setNomorPO] = useState('PO');
-  const [noSuratJalan, setNoSuratJalan] = useState('SJ');
+  const [vendor, setVendor] = useState(vendors[0]?.namaVendor || '');
+  const [nomorPO, setNomorPO] = useState('No PO');
+  const [noSuratJalan, setNoSuratJalan] = useState('No SJ');
   const [platKendaraan, setPlatKendaraan] = useState('');
   const [palletInCount, setPalletInCount] = useState<number>(10);
 
@@ -250,12 +259,17 @@ export const IncomingView: React.FC = () => {
     setIsFormOpen(false);
   };
 
-  const filteredHeaders = incomingHeaders.filter(h => 
-    h.noReceiving.toLowerCase().includes(search.toLowerCase()) ||
-    h.noSuratJalan.toLowerCase().includes(search.toLowerCase()) ||
-    h.vendor.toLowerCase().includes(search.toLowerCase()) ||
-    h.nomorPO.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredHeaders = incomingHeaders.filter(h => {
+    const matchesSearch = h.noReceiving.toLowerCase().includes(search.toLowerCase()) ||
+      h.noSuratJalan.toLowerCase().includes(search.toLowerCase()) ||
+      h.vendor.toLowerCase().includes(search.toLowerCase()) ||
+      h.nomorPO.toLowerCase().includes(search.toLowerCase());
+
+    if (showTodayOnly) {
+      return matchesSearch && h.tanggal === filterDate;
+    }
+    return matchesSearch;
+  });
 
   return (
     <div className="space-y-6">
@@ -284,7 +298,7 @@ export const IncomingView: React.FC = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex items-center space-x-3">
+      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="relative flex-1">
           <input
             type="text"
@@ -295,13 +309,48 @@ export const IncomingView: React.FC = () => {
           />
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
         </div>
+
+        {/* Date Filter Segmented Controls */}
+        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 self-start md:self-auto shrink-0 gap-1 items-center">
+          <div
+            onClick={() => setShowTodayOnly(true)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+              showTodayOnly 
+                ? 'bg-white text-slate-950 shadow-xs' 
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <span>Filter Tanggal:</span>
+            <input
+              type="date"
+              value={filterDate}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                setFilterDate(e.target.value);
+                setShowTodayOnly(true);
+              }}
+              className="bg-transparent border-none text-xs font-bold focus:outline-none focus:ring-0 p-0 text-slate-950 outline-none w-28 cursor-pointer"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowTodayOnly(false)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
+              !showTodayOnly 
+                ? 'bg-white text-slate-950 shadow-xs' 
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <span>Semua Riwayat</span>
+          </button>
+        </div>
       </div>
 
       {/* Incoming Transactions Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
               <tr>
                 <th className="p-3.5">Tanggal</th>
                 <th className="p-3.5">Vendor</th>
@@ -357,7 +406,7 @@ export const IncomingView: React.FC = () => {
                                 <span>Rincian Detail Barang Receiving</span>
                               </h4>
                               <table className="w-full text-left text-xs text-slate-700">
-                                <thead className="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px]">
+                                <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600 font-semibold uppercase text-[10px]">
                                   <tr>
                                     <th className="p-2">Material ID</th>
                                     <th className="p-2">Nama Barang</th>
@@ -405,8 +454,8 @@ export const IncomingView: React.FC = () => {
 
       {/* NEW RECEIVING FORM MODAL */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden text-slate-800 my-8">
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-slate-950/50 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl shadow-2xl text-slate-800 my-8">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <h3 className="font-bold text-slate-900 text-base flex items-center space-x-2">
                 <ArrowDownLeft className="w-5 h-5 text-emerald-600" />

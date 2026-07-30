@@ -4,45 +4,148 @@ import { useWms } from '../context/WmsContext';
 import { OutboundDetail, OutboundHeader } from '../types';
 import { exportToExcel, generateSuratJalanPDF } from '../utils/exportUtils';
 
+interface MaterialSearchSelectProps {
+  value: string;
+  onChange: (matId: string) => void;
+  materials: any[];
+  getMaterialStockByGedung: (matId: string) => Record<string, number>;
+}
+
+const MaterialSearchSelect: React.FC<MaterialSearchSelectProps> = ({
+  value,
+  onChange,
+  materials,
+  getMaterialStockByGedung
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  
+  const selectedMaterial = materials.find(m => m.id === value);
+  const displayValue = isOpen ? search : (selectedMaterial ? `${selectedMaterial.id} - ${selectedMaterial.namaBarang}` : '');
+
+  const filtered = materials.filter(m => {
+    const term = search.toLowerCase();
+    return m.id.toLowerCase().includes(term) || m.namaBarang.toLowerCase().includes(term);
+  });
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={displayValue}
+        onChange={e => {
+          setSearch(e.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => {
+          setSearch('');
+          setIsOpen(true);
+        }}
+        onBlur={() => {
+          setTimeout(() => {
+            setIsOpen(false);
+          }, 200);
+        }}
+        placeholder="Ketik nama / ID material..."
+        className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+      />
+      
+      {isOpen && (
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="p-3 text-xs text-slate-500 text-center">Tidak ada material cocok</div>
+          ) : (
+            filtered.map(m => {
+              const bStocks = getMaterialStockByGedung(m.id);
+              const activeBuildings = Object.entries(bStocks)
+                .filter(([_, stock]) => (stock as number) > 0)
+                .map(([name, stock]) => `${name}: ${stock}`)
+                .join(', ');
+
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onMouseDown={() => {
+                    onChange(m.id);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full text-left px-2.5 py-2 text-xs hover:bg-indigo-50/50 transition-colors border-b border-slate-100 last:border-b-0 block ${m.id === value ? 'bg-indigo-50 font-semibold text-indigo-600' : 'text-slate-700'}`}
+                >
+                  <div className="font-semibold">{m.id} - {m.namaBarang}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    Stok Sistem: {m.currentStock} {m.satuan}
+                    {activeBuildings && <span className="block text-indigo-600 font-medium">Gedung: {activeBuildings}</span>}
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const OutboundView: React.FC = () => {
-  const { outboundHeaders, materials, currentUser, addOutbound, gedungList } = useWms();
+  const { outboundHeaders, materials, currentUser, addOutbound, gedungList, showNotification, getMaterialStockByGedung } = useWms();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showTodayOnly, setShowTodayOnly] = useState(true);
 
-  // Form State
-  const today = new Date().toISOString().split('T')[0];
-  const [nomorDOSJ, setNomorDOSJ] = useState('SJ-2026-001');
+  // Timezone-safe local date YYYY-MM-DD
+  const getLocalDateString = () => {
+    const d = new Date();
+    const offset = d.getTimezoneOffset();
+    const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
+  };
+
+  const today = getLocalDateString();
+  const [filterDate, setFilterDate] = useState(today);
+  const [nomorDOSJ, setNomorDOSJ] = useState('SJB009-2026-001');
   const [customer, setCustomer] = useState('');
   const [tanggal, setTanggal] = useState(today);
   const [ekspedisi, setEkspedisi] = useState('');
   const [palletOutCount, setPalletOutCount] = useState<number>(8);
+  const [noKendaraan, setNoKendaraan] = useState('');
 
-  const [details, setDetails] = useState<Omit<OutboundDetail, 'id'>[]>([
-    {
-      materialId: materials[0]?.id || '',
-      namaBarang: materials[0]?.namaBarang || '',
-      qty: 200,
-      satuan: materials[0]?.satuan || '',
-      picChecker: currentUser.nama,
-      keterangan: '',
-      gedungAsal: materials[0]?.lokasiDefaut || 'Gedung E1'
-    }
-  ]);
+  const [details, setDetails] = useState<Omit<OutboundDetail, 'id'>[]>(() => {
+    const mat = materials[0];
+    if (!mat) return [];
+    const bStocks = getMaterialStockByGedung(mat.id);
+    const buildingWithStock = Object.keys(bStocks).find(bName => bStocks[bName] > 0);
+    return [
+      {
+        materialId: mat.id,
+        namaBarang: mat.namaBarang,
+        qty: 200,
+        satuan: mat.satuan,
+        picChecker: currentUser.nama,
+        keterangan: '',
+        gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1'
+      }
+    ];
+  });
 
   const handleAddLine = () => {
     const mat = materials[0];
+    if (!mat) return;
+    const bStocks = getMaterialStockByGedung(mat.id);
+    const buildingWithStock = Object.keys(bStocks).find(bName => bStocks[bName] > 0);
+
     setDetails(prev => [
       ...prev,
       {
-        materialId: mat?.id || '',
-        namaBarang: mat?.namaBarang || '',
+        materialId: mat.id,
+        namaBarang: mat.namaBarang,
         qty: 50,
-        satuan: mat?.satuan || '',
+        satuan: mat.satuan,
         picChecker: currentUser.nama,
         keterangan: '',
-        gedungAsal: mat?.lokasiDefaut || 'Gedung E1'
+        gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1'
       }
     ]);
   };
@@ -56,6 +159,9 @@ export const OutboundView: React.FC = () => {
   const handleMaterialChange = (idx: number, matId: string) => {
     const mat = materials.find(m => m.id === matId);
     if (!mat) return;
+    const bStocks = getMaterialStockByGedung(mat.id);
+    const buildingWithStock = Object.keys(bStocks).find(bName => bStocks[bName] > 0);
+
     setDetails(prev => prev.map((item, i) => {
       if (i === idx) {
         return {
@@ -63,7 +169,7 @@ export const OutboundView: React.FC = () => {
           materialId: mat.id,
           namaBarang: mat.namaBarang,
           satuan: mat.satuan,
-          gedungAsal: mat.lokasiDefaut || 'Gedung E1'
+          gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1'
         };
       }
       return item;
@@ -88,23 +194,68 @@ export const OutboundView: React.FC = () => {
       qty: parseVal(d.qty)
     }));
 
+    // Validate stock levels including potential duplicates
+    const requestedStockMap: Record<string, number> = {};
+    for (const detail of parsedDetails) {
+      if (detail.qty <= 0) {
+        showNotification(
+          'Error Validasi',
+          `Jumlah kirim harus lebih dari 0.`,
+          'error',
+          'Outbound Delivery'
+        );
+        return;
+      }
+      requestedStockMap[detail.materialId] = (requestedStockMap[detail.materialId] || 0) + detail.qty;
+    }
+
+    for (const [matId, totalQty] of Object.entries(requestedStockMap)) {
+      const mat = materials.find(m => m.id === matId);
+      if (!mat) {
+        showNotification(
+          'Error Validasi',
+          `Material ID ${matId} tidak ditemukan.`,
+          'error',
+          'Outbound Delivery'
+        );
+        return;
+      }
+      if (totalQty > mat.currentStock) {
+        showNotification(
+          'Stok Tidak Cukup',
+          `Stok fisik ${mat.namaBarang} tidak mencukupi. Tersedia: ${mat.currentStock} ${mat.satuan}, yang diajukan: ${totalQty} ${mat.satuan}.`,
+          'error',
+          'Outbound Delivery'
+        );
+        return;
+      }
+    }
+
     addOutbound({
       nomorDOSJ,
       customer,
       tanggal,
       ekspedisi,
+      noKendaraan,
       palletOutCount: parseVal(palletOutCount),
       details: parsedDetails
     });
 
     setIsFormOpen(false);
+    setNoKendaraan('');
   };
 
-  const filteredOutbounds = outboundHeaders.filter(o => 
-    o.nomorDOSJ.toLowerCase().includes(search.toLowerCase()) ||
-    o.customer.toLowerCase().includes(search.toLowerCase()) ||
-    o.ekspedisi.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredOutbounds = outboundHeaders.filter(o => {
+    const matchesSearch = o.nomorDOSJ.toLowerCase().includes(search.toLowerCase()) ||
+      o.customer.toLowerCase().includes(search.toLowerCase()) ||
+      o.ekspedisi.toLowerCase().includes(search.toLowerCase()) ||
+      (o.noKendaraan || '').toLowerCase().includes(search.toLowerCase());
+
+    if (showTodayOnly) {
+      return matchesSearch && o.tanggal === filterDate;
+    }
+    return matchesSearch;
+  });
 
   const handleExportExcel = () => {
     const rows = outboundHeaders.map(o => ({
@@ -112,6 +263,7 @@ export const OutboundView: React.FC = () => {
       'Tanggal': o.tanggal,
       'Customer': o.customer,
       'Ekspedisi': o.ekspedisi,
+      'No Kendaraan': o.noKendaraan || '-',
       'Pallet Out': o.palletOutCount,
       'Jumlah SKU': o.details.length
     }));
@@ -131,7 +283,7 @@ export const OutboundView: React.FC = () => {
             <span>Outbound Delivery (Pengiriman)</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Pengeluaran barang dari gudang pancawati ke PT MIM / customer, cek barang,membuat surat jalan, reservasi sistem, input data outbound.
+            Pengeluaran barang dari gudang pancawati ke customer,Sicom dan PT MIM dengan regulasi pengecekan barang,membuat surat jalan, reservasi sistem, input data outbound.
           </p>
         </div>
 
@@ -149,14 +301,14 @@ export const OutboundView: React.FC = () => {
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center space-x-1.5 transition-all"
           >
             <Plus className="w-4 h-4" />
-            <span>Buat Outbound DO Baru</span>
+            <span>Buat Outbound</span>
           </button>
         </div>
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
-        <div className="relative">
+      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="relative flex-1">
           <input
             type="text"
             value={search}
@@ -166,18 +318,54 @@ export const OutboundView: React.FC = () => {
           />
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
         </div>
+
+        {/* Date Filter Segmented Controls */}
+        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 self-start md:self-auto shrink-0 gap-1 items-center">
+          <div
+            onClick={() => setShowTodayOnly(true)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+              showTodayOnly 
+                ? 'bg-white text-indigo-950 shadow-xs' 
+                : 'text-slate-500 hover:text-indigo-800'
+            }`}
+          >
+            <span>Filter Tanggal:</span>
+            <input
+              type="date"
+              value={filterDate}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                setFilterDate(e.target.value);
+                setShowTodayOnly(true);
+              }}
+              className="bg-transparent border-none text-xs font-bold focus:outline-none focus:ring-0 p-0 text-slate-950 outline-none w-28 cursor-pointer"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowTodayOnly(false)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
+              !showTodayOnly 
+                ? 'bg-white text-indigo-950 shadow-xs' 
+                : 'text-slate-500 hover:text-indigo-800'
+            }`}
+          >
+            <span>Semua Riwayat</span>
+          </button>
+        </div>
       </div>
 
       {/* Table Outbound */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
               <tr>
                 <th className="p-3.5">Nomor DO / SJ</th>
                 <th className="p-3.5">Tanggal</th>
                 <th className="p-3.5">Customer / Tujuan</th>
                 <th className="p-3.5">Ekspedisi</th>
+                <th className="p-3.5">No. Kendaraan</th>
                 <th className="p-3.5">Pallet OUT</th>
                 <th className="p-3.5 text-center">Items</th>
                 <th className="p-3.5 text-center">Aksi & Print</th>
@@ -186,7 +374,7 @@ export const OutboundView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredOutbounds.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={8} className="p-8 text-center text-slate-400 italic">
                     Tidak ada transaksi pengiriman outbound.
                   </td>
                 </tr>
@@ -200,6 +388,7 @@ export const OutboundView: React.FC = () => {
                         <td className="p-3.5 text-slate-600">{o.tanggal}</td>
                         <td className="p-3.5 font-semibold text-slate-900">{o.customer}</td>
                         <td className="p-3.5 text-slate-700 font-medium">{o.ekspedisi}</td>
+                        <td className="p-3.5 font-mono text-slate-700 font-medium">{o.noKendaraan || '-'}</td>
                         <td className="p-3.5">
                           <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 font-bold rounded">
                             {o.palletOutCount} Pallet
@@ -227,14 +416,14 @@ export const OutboundView: React.FC = () => {
                       {/* Expanded Line Details */}
                       {isExpanded && (
                         <tr className="bg-slate-50/70">
-                          <td colSpan={7} className="p-4">
+                          <td colSpan={8} className="p-4">
                             <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 shadow-xs">
                               <h4 className="text-xs font-bold text-indigo-600 flex items-center space-x-1">
                                 <FileText className="w-3.5 h-3.5" />
                                 <span>Rincian Barang Dikirim (DO: {o.nomorDOSJ})</span>
                               </h4>
                               <table className="w-full text-left text-xs text-slate-700">
-                                <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px]">
+                                <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px]">
                                   <tr>
                                     <th className="p-2">Material ID</th>
                                     <th className="p-2">Nama Barang</th>
@@ -274,12 +463,12 @@ export const OutboundView: React.FC = () => {
 
       {/* FORM MODAL OUTBOUND */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden text-slate-800 my-8">
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-slate-950/50 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl shadow-2xl text-slate-800 my-8">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <h3 className="font-bold text-slate-900 text-base flex items-center space-x-2">
                 <ArrowUpRight className="w-5 h-5 text-indigo-600" />
-                <span>Form Outbound Delivery Order (DO)</span>
+                <span>Form Outbound Delivery</span>
               </h3>
               <button onClick={() => setIsFormOpen(false)} className="text-slate-400 hover:text-slate-700 font-bold">✕</button>
             </div>
@@ -287,7 +476,7 @@ export const OutboundView: React.FC = () => {
             <form onSubmit={handleFormSubmit} className="p-6 space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nomor DO / SJ</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nomor SJ</label>
                   <input
                     type="text"
                     required
@@ -298,7 +487,7 @@ export const OutboundView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Customer / Penerima</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Penerima</label>
                   <input
                     type="text"
                     required
@@ -341,6 +530,18 @@ export const OutboundView: React.FC = () => {
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">No. Kendaraan (Plat Nomor)</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: B 1234 ABC"
+                    value={noKendaraan}
+                    onChange={e => setNoKendaraan(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -360,16 +561,13 @@ export const OutboundView: React.FC = () => {
                   {details.map((item, idx) => (
                     <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
                       <div className="sm:col-span-4">
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">Pilih Material</label>
-                        <select
+                        <label className="block text-[11px] font-medium text-slate-600 mb-1">Pilih Material (Ketik / Cari)</label>
+                        <MaterialSearchSelect
                           value={item.materialId}
-                          onChange={e => handleMaterialChange(idx, e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
-                        >
-                          {materials.map(m => (
-                            <option key={m.id} value={m.id}>{m.id} - {m.namaBarang} (Tersedia: {m.currentStock} {m.satuan})</option>
-                          ))}
-                        </select>
+                          onChange={val => handleMaterialChange(idx, val)}
+                          materials={materials}
+                          getMaterialStockByGedung={getMaterialStockByGedung}
+                        />
                       </div>
 
                       <div className="sm:col-span-2">
@@ -396,9 +594,14 @@ export const OutboundView: React.FC = () => {
                           }}
                           className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
                         >
-                          {gedungList.map(g => (
-                            <option key={g.id} value={g.nama}>{g.nama}</option>
-                          ))}
+                          {gedungList.map(g => {
+                            const stockInGedung = getMaterialStockByGedung(item.materialId)[g.nama] || 0;
+                            return (
+                              <option key={g.id} value={g.nama}>
+                                {g.nama} ({stockInGedung > 0 ? `Stok: ${stockInGedung}` : 'KOSONG'})
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
 

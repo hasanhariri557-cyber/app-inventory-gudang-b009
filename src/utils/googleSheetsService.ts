@@ -42,10 +42,16 @@ export async function createWmsSpreadsheet(accessToken: string, title: string): 
     },
     sheets: [
       { properties: { title: 'Master Materials' } },
+      { properties: { title: 'Master Vendors' } },
+      { properties: { title: 'Master Gedung' } },
+      { properties: { title: 'Master Users' } },
       { properties: { title: 'Incoming Receiving' } },
       { properties: { title: 'Outbound Delivery' } },
       { properties: { title: 'Stock Opname' } },
-      { properties: { title: 'Monitoring Reject' } }
+      { properties: { title: 'Monitoring Reject' } },
+      { properties: { title: 'Put Away' } },
+      { properties: { title: 'Mutasi Internal' } },
+      { properties: { title: 'Kartu Stock' } }
     ],
   };
 
@@ -69,6 +75,38 @@ export async function createWmsSpreadsheet(accessToken: string, title: string): 
     name: data.properties.title,
     webViewLink: data.spreadsheetUrl,
   };
+}
+
+/**
+ * Add a new sheet tab to an existing Spreadsheet
+ */
+export async function addSheetToSpreadsheet(accessToken: string, spreadsheetId: string, sheetTitle: string): Promise<void> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  const body = {
+    requests: [
+      {
+        addSheet: {
+          properties: {
+            title: sheetTitle,
+          },
+        },
+      },
+    ],
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.error?.message || `Gagal membuat tab "${sheetTitle}" di Google Spreadsheet.`);
+  }
 }
 
 /**
@@ -143,4 +181,38 @@ export async function getSheetValues(
 
   const data = await res.json();
   return data.values || [];
+}
+
+/**
+ * Update sheet values and automatically create the sheet tab if it doesn't exist
+ */
+export async function updateSheetValuesWithAutoCreate(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: string,
+  headers: string[],
+  rows: any[][]
+): Promise<void> {
+  try {
+    await updateSheetValues(accessToken, spreadsheetId, sheetName, headers, rows);
+  } catch (err: any) {
+    // If the error message indicates the sheet/range doesn't exist
+    if (err.message && (
+      err.message.includes('not found') || 
+      err.message.includes('range') || 
+      err.message.includes('400') || 
+      err.message.includes('Requested entity was not found')
+    )) {
+      try {
+        await addSheetToSpreadsheet(accessToken, spreadsheetId, sheetName);
+        // Wait a small moment and retry updating values
+        await updateSheetValues(accessToken, spreadsheetId, sheetName, headers, rows);
+        return;
+      } catch (createErr: any) {
+        console.error(`Gagal membuat tab otomatis untuk "${sheetName}":`, createErr);
+        throw new Error(`Gagal menulis data karena tab "${sheetName}" tidak ditemukan dan gagal dibuat secara otomatis.`);
+      }
+    }
+    throw err;
+  }
 }

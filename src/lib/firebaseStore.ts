@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { 
   getFirestore, 
   collection, 
@@ -7,11 +7,22 @@ import {
   deleteDoc, 
   getDocs, 
   writeBatch 
-} from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+} from "firebase/firestore";
+const firebaseConfig = {
+  projectId: "prime-xylopolist-5v8b6",
+  appId: "1:152292905925:web:9f8860729b7f4119ecb1ac",
+  apiKey: "AIzaSyCrbaLWf7WedIxz-c2-9nydqk9SVpe-A7g",
+  authDomain: "prime-xylopolist-5v8b6.firebaseapp.com",
+  storageBucket: "prime-xylopolist-5v8b6.firebasestorage.app",
+  messagingSenderId: "152292905925",
+  firestoreDatabaseId: "ai-studio-gudangb009-7f2dae09-fc55-48db-a7f3-b22cf82601e0"
+};
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+// 1. Inisialisasi Firebase App secara aman
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+// 2. Hubungkan ke Database khusus Firestore AI Studio
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 /**
  * Save a single document to Firestore
@@ -88,3 +99,95 @@ export async function syncCollectionToFirestore(collectionName: string, dataList
     console.error(`Error syncing collection ${collectionName}:`, error);
   }
 }
+
+/**
+ * Sync only changed/deleted items to Firestore to reduce quota usage and prevent rate exceeded errors.
+ */
+export async function syncCollectionIncrementally(
+  collectionName: string, 
+  newList: any[], 
+  oldListStr: string | undefined
+) {
+  if (!oldListStr) {
+    // Fallback to standard sync if old state string is unavailable
+    await syncCollectionToFirestore(collectionName, newList);
+    return;
+  }
+
+  try {
+    const oldList = JSON.parse(oldListStr) as any[];
+    
+    // Create maps of ID -> item
+    const oldMap = new Map<string, any>();
+    oldList.forEach(item => {
+      if (item && item.id !== undefined) oldMap.set(String(item.id), item);
+    });
+
+    const newMap = new Map<string, any>();
+    newList.forEach(item => {
+      if (item && item.id !== undefined) newMap.set(String(item.id), item);
+    });
+
+    // 1. Find items to create or update
+    const toWrite: any[] = [];
+    newList.forEach(newItem => {
+      if (!newItem || newItem.id === undefined) return;
+      const oldItem = oldMap.get(String(newItem.id));
+      if (!oldItem) {
+        toWrite.push(newItem);
+      } else {
+        // Compare values, ignoring dynamic timestamps
+        const { updatedAt: oldUpdated, ...oldRest } = oldItem;
+        const { updatedAt: newUpdated, ...newRest } = newItem;
+        if (JSON.stringify(oldRest) !== JSON.stringify(newRest)) {
+          toWrite.push(newItem);
+        }
+      }
+    });
+
+    // 2. Find items to delete
+    const toDelete: string[] = [];
+    oldList.forEach(oldItem => {
+      if (oldItem && oldItem.id !== undefined && !newMap.has(String(oldItem.id))) {
+        toDelete.push(String(oldItem.id));
+      }
+    });
+
+    if (toWrite.length === 0 && toDelete.length === 0) {
+      // Nothing changed!
+      return;
+    }
+
+    console.log(`[Incremental Sync] ${collectionName}: Writing ${toWrite.length} items, deleting ${toDelete.length} items.`);
+
+    // Write changes in batches of 400
+    const allOperations: Array<{ type: 'set' | 'delete'; id: string; data?: any }> = [
+      ...toWrite.map(item => ({ type: 'set' as const, id: String(item.id), data: item })),
+      ...toDelete.map(id => ({ type: 'delete' as const, id, data: undefined }))
+    ];
+
+    for (let i = 0; i < allOperations.length; i += 400) {
+      const chunk = allOperations.slice(i, i + 400);
+      const batch = writeBatch(db);
+      
+      chunk.forEach(op => {
+        const docRef = doc(db, collectionName, op.id);
+        if (op.type === 'set' && op.data) {
+          batch.set(docRef, {
+            ...op.data,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } else if (op.type === 'delete') {
+          batch.delete(docRef);
+        }
+      });
+      
+      await batch.commit();
+    }
+  } catch (error) {
+    console.error(`Error in syncCollectionIncrementally for ${collectionName}:`, error);
+    // Fallback on failure
+    await syncCollectionToFirestore(collectionName, newList);
+  }
+}
+

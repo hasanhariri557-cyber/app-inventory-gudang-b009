@@ -32,10 +32,24 @@ import {
   Upload,
   Boxes,
   Trash2,
-  Edit3
+  Edit3,
+  FileSpreadsheet,
+  Cloud,
+  CloudUpload,
+  RefreshCw,
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { User, Vendor, Gedung, MasterSettingItem, UserRole, MenuKey, MenuConfigSettings, AdminAuthorities } from '../types';
+import { exportAllWmsToExcel } from '../utils/exportUtils';
+import { initAuth, googleSignIn, googleLogout } from '../lib/firebaseAuth';
+import { 
+  listGoogleSpreadsheets, 
+  createWmsSpreadsheet, 
+  updateSheetValuesWithAutoCreate, 
+  GoogleSpreadsheetFile 
+} from '../utils/googleSheetsService';
 
 export const SettingView: React.FC = () => {
   const { 
@@ -68,10 +82,325 @@ export const SettingView: React.FC = () => {
     updateRolePermission,
     updateAdminAuthority,
     updateMenuConfig,
-    resetToDefaultData
+    resetToDefaultData,
+    materials,
+    incomingHeaders,
+    outboundHeaders,
+    rejects,
+    putAways,
+    stockOpnames,
+    mutasis,
+    kartuStocks
   } = useWms();
 
-  const [activeTab, setActiveTab] = useState<'branding' | 'roles' | 'admin_authority' | 'menu_settings' | 'users' | 'vendors' | 'gedung' | 'master'>('branding');
+  const [activeTab, setActiveTab] = useState<'branding' | 'roles' | 'admin_authority' | 'menu_settings' | 'users' | 'vendors' | 'gedung' | 'master' | 'backup'>('branding');
+
+  // Google Sheets Backup state variables
+  const [isGsAuthenticated, setIsGsAuthenticated] = useState(false);
+  const [gsUser, setGsUser] = useState<any | null>(null);
+  const [gsToken, setGsToken] = useState<string | null>(null);
+  const [gsSpreadsheets, setGsSpreadsheets] = useState<GoogleSpreadsheetFile[]>([]);
+  const [selectedGsSpreadsheet, setSelectedGsSpreadsheet] = useState<GoogleSpreadsheetFile | null>(() => {
+    const saved = localStorage.getItem('wms_selected_spreadsheet');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [isFetchingGsSheets, setIsFetchingGsSheets] = useState(false);
+  const [isCreatingGsSheet, setIsCreatingGsSheet] = useState(false);
+  const [isGsSyncing, setIsGsSyncing] = useState(false);
+  const [newGsSheetTitle, setNewGsSheetTitle] = useState('WMS Gudang - Backup Real-Time');
+  const [gsError, setGsError] = useState<string | null>(null);
+  const [gsSuccess, setGsSuccess] = useState<string | null>(null);
+
+  // Initialize Google Auth for SettingView
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (user, accessToken) => {
+        setIsGsAuthenticated(true);
+        setGsUser(user);
+        setGsToken(accessToken);
+        loadUserSpreadsheets(accessToken);
+      },
+      () => {
+        setIsGsAuthenticated(false);
+        setGsUser(null);
+        setGsToken(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch spreadsheets
+  const loadUserSpreadsheets = async (accessToken: string) => {
+    setIsFetchingGsSheets(true);
+    setGsError(null);
+    try {
+      const files = await listGoogleSpreadsheets(accessToken);
+      setGsSpreadsheets(files);
+    } catch (err: any) {
+      console.error(err);
+      setGsError('Gagal memuat daftar Spreadsheet dari Google Drive.');
+    } finally {
+      setIsFetchingGsSheets(false);
+    }
+  };
+
+  // Google Login in SettingView
+  const handleGoogleLogin = async () => {
+    try {
+      setGsError(null);
+      const res = await googleSignIn();
+      if (res) {
+        setIsGsAuthenticated(true);
+        setGsUser(res.user);
+        setGsToken(res.accessToken);
+        setGsSuccess('Akun Google berhasil terhubung!');
+        loadUserSpreadsheets(res.accessToken);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setGsError(err.message || 'Gagal login menggunakan Google.');
+    }
+  };
+
+  // Google Logout in SettingView
+  const handleGoogleLogout = async () => {
+    try {
+      await googleLogout();
+      setIsGsAuthenticated(false);
+      setGsUser(null);
+      setGsToken(null);
+      setGsSpreadsheets([]);
+      setSelectedGsSpreadsheet(null);
+      localStorage.removeItem('wms_selected_spreadsheet');
+      setGsSuccess('Koneksi Google diputuskan.');
+    } catch (err: any) {
+      setGsError(err.message || 'Gagal logout akun Google.');
+    }
+  };
+
+  // Select existing spreadsheet
+  const handleSelectSpreadsheet = (sheet: GoogleSpreadsheetFile) => {
+    setSelectedGsSpreadsheet(sheet);
+    localStorage.setItem('wms_selected_spreadsheet', JSON.stringify(sheet));
+    setGsSuccess(`Spreadsheet terhubung: ${sheet.name}`);
+  };
+
+  // Create new spreadsheet
+  const handleCreateNewSpreadsheet = async () => {
+    if (!gsToken) return;
+    setIsCreatingGsSheet(true);
+    setGsError(null);
+    setGsSuccess(null);
+    try {
+      const newSheet = await createWmsSpreadsheet(gsToken, newGsSheetTitle);
+      setSelectedGsSpreadsheet(newSheet);
+      localStorage.setItem('wms_selected_spreadsheet', JSON.stringify(newSheet));
+      await loadUserSpreadsheets(gsToken);
+      setGsSuccess(`Spreadsheet baru "${newSheet.name}" berhasil dibuat!`);
+    } catch (err: any) {
+      console.error(err);
+      setGsError(err.message || 'Gagal membuat Google Spreadsheet baru.');
+    } finally {
+      setIsCreatingGsSheet(false);
+    }
+  };
+
+  const handleSyncAllToGoogleSheets = async () => {
+    if (!gsToken || !selectedGsSpreadsheet) {
+      setGsError('Silakan hubungkan akun Google dan pilih spreadsheet cadangan terlebih dahulu.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Apakah Anda yakin ingin melakukan Backup Real-Time seluruh data WMS ke Google Spreadsheet "${selectedGsSpreadsheet.name}"? Data di tab yang ada akan diperbarui.`
+    );
+    if (!confirmed) return;
+
+    setIsGsSyncing(true);
+    setGsError(null);
+    setGsSuccess(null);
+
+    try {
+      // 1. Sync Master Materials
+      const materialsHeaders = ['ID Material', 'Nama Barang', 'Kode SKU', 'Kategori', 'Satuan', 'Stok Sistem', 'Limit Minimum', 'Lokasi Simpan'];
+      const materialsRows = materials.map((m) => [
+        m.id,
+        m.nama,
+        m.sku,
+        m.kategori,
+        m.satuan,
+        m.currentStock,
+        m.minimumStock,
+        m.lokasiUtama || 'Gedung A1'
+      ]);
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Master Materials', materialsHeaders, materialsRows);
+
+      // 2. Sync Master Vendors
+      const vendorsHeaders = ['ID Vendor', 'Nama Vendor', 'Kontak Person', 'No Telepon', 'Alamat Pemasok'];
+      const vendorsRows = vendors.map((v) => [
+        v.id,
+        v.nama,
+        v.kontak,
+        v.telepon,
+        v.alamat
+      ]);
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Master Vendors', vendorsHeaders, vendorsRows);
+
+      // 3. Sync Master Gedung
+      const gedungHeaders = ['ID Gedung', 'Nama Gedung', 'Zona / Lokasi', 'Kapasitas Pallet', 'Pallet Terisi', 'Deskripsi Gedung'];
+      const gedungRows = gedungList.map((g) => [
+        g.id,
+        g.nama,
+        g.zona,
+        g.kapasitasPallet,
+        g.palletTerisi,
+        g.deskripsi
+      ]);
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Master Gedung', gedungHeaders, gedungRows);
+
+      // 4. Sync Master Users
+      const usersHeaders = ['ID User', 'Username', 'Nama Lengkap', 'Role Akses', 'Status Akun'];
+      const usersRows = users.map((u) => [
+        u.id,
+        u.username,
+        u.nama,
+        u.role,
+        u.status
+      ]);
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Master Users', usersHeaders, usersRows);
+
+      // 5. Sync Incoming Receiving
+      const incomingHeadersList = ['ID Transaksi', 'No Receiving', 'Tanggal Penerimaan', 'Nama Vendor', 'Nomor PO', 'No Surat Jalan', 'Plat Kendaraan', 'Pallet Masuk', 'ID Material', 'Nama Barang', 'Qty Kirim', 'Qty Diterima', 'Qty Reject', 'Alasan Reject', 'Lokasi Penyimpanan'];
+      const incomingRows: any[] = [];
+      incomingHeaders.forEach(h => {
+        h.details.forEach(d => {
+          incomingRows.push([
+            h.id,
+            h.noReceiving,
+            h.tanggal,
+            h.vendor,
+            h.nomorPO,
+            h.noSuratJalan,
+            h.platKendaraan,
+            h.palletInCount,
+            d.materialId,
+            d.namaBarang,
+            d.qtyKirim,
+            d.qtyDiterima,
+            d.qtyReject,
+            d.alasanReject || '',
+            d.lokasiSimpan || ''
+          ]);
+        });
+      });
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Incoming Receiving', incomingHeadersList, incomingRows);
+
+      // 6. Sync Outbound Delivery
+      const outboundHeadersList = ['ID Transaksi', 'No DO/SJ', 'Customer', 'Tanggal Pengiriman', 'Ekspedisi', 'Pallet Keluar', 'No Kendaraan', 'ID Material', 'Nama Barang', 'Qty Keluar', 'Lokasi Asal'];
+      const outboundRows: any[] = [];
+      outboundHeaders.forEach(o => {
+        o.details.forEach(d => {
+          outboundRows.push([
+            o.id,
+            o.nomorDOSJ,
+            o.customer,
+            o.tanggal,
+            o.ekspedisi,
+            o.palletOutCount,
+            o.noKendaraan || '',
+            d.materialId,
+            d.namaBarang,
+            d.qty,
+            d.lokasiAsal || ''
+          ]);
+        });
+      });
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Outbound Delivery', outboundHeadersList, outboundRows);
+
+      // 7. Sync Stock Opname
+      const stockOpnameHeaders = ['ID Opname', 'Tanggal Opname', 'ID Material', 'Nama Barang', 'Qty Sistem', 'Qty Fisik', 'Selisih / Varian', 'Penyebab Selisih', 'Status Penyesuaian', 'PIC Pemeriksa'];
+      const stockOpnameRows = stockOpnames.map((s) => [
+        s.id,
+        s.tanggal,
+        s.materialId,
+        s.namaBarang,
+        s.qtySistem,
+        s.qtyFisik,
+        s.selisih,
+        s.penyebab,
+        s.status,
+        s.pic
+      ]);
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Stock Opname', stockOpnameHeaders, stockOpnameRows);
+
+      // 8. Sync Monitoring Reject
+      const rejectHeaders = ['ID Reject', 'Tanggal', 'ID Material', 'Nama Barang', 'PO Pembelian', 'Vendor', 'Qty Reject', 'Alasan', 'No Dokumen Retur', 'Status Retur'];
+      const rejectRows = rejects.map((r) => [
+        r.id,
+        r.tanggal,
+        r.materialId,
+        r.namaBarang,
+        r.poPembelian,
+        r.vendor,
+        r.qtyReject,
+        r.alasanReject,
+        r.poReturDokumen,
+        r.status
+      ]);
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Monitoring Reject', rejectHeaders, rejectRows);
+
+      // 9. Sync Put Away
+      const putAwayHeaders = ['ID Put Away', 'No Receiving', 'ID Material', 'Nama Barang', 'Qty Put Away', 'Gedung / Lokasi', 'Status'];
+      const putAwayRows = putAways.map((p) => [
+        p.id,
+        p.noReceiving,
+        p.materialId,
+        p.namaBarang,
+        p.qty,
+        p.gedung,
+        p.status
+      ]);
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Put Away', putAwayHeaders, putAwayRows);
+
+      // 10. Sync Mutasi Internal
+      const mutasiHeaders = ['ID Mutasi', 'Tanggal Mutasi', 'ID Material', 'Nama Barang', 'Qty Mutasi', 'Dari Lokasi', 'Ke Lokasi', 'Keterangan', 'PIC Mutasi'];
+      const mutasiRows = mutasis.map((m) => [
+        m.id,
+        m.tanggal,
+        m.materialId,
+        m.namaBarang,
+        m.qty,
+        m.dariLokasi,
+        m.keLokasi,
+        m.keterangan || '',
+        m.pic
+      ]);
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Mutasi Internal', mutasiHeaders, mutasiRows);
+
+      // 11. Sync Kartu Stock
+      const kartuStockHeaders = ['ID Entry', 'Tanggal Log', 'ID Material', 'Jenis Mutasi', 'Referensi No', 'Jumlah Masuk', 'Jumlah Keluar', 'Saldo Akhir', 'Keterangan', 'Lokasi Penyimpanan'];
+      const kartuStockRows = kartuStocks.map((k) => [
+        k.id,
+        k.tanggal,
+        k.materialId,
+        k.jenisTransaksi,
+        k.refNo,
+        k.masuk,
+        k.keluar,
+        k.saldo,
+        k.keterangan || '',
+        k.lokasi || ''
+      ]);
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Kartu Stock', kartuStockHeaders, kartuStockRows);
+
+      setGsSuccess('Backup database ke Google Sheets Berhasil! Seluruh 11 tab master & transaksi telah berhasil disinkronkan.');
+    } catch (err: any) {
+      console.error(err);
+      setGsError(err.message || 'Gagal menyelaraskan data ke Google Sheets.');
+    } finally {
+      setIsGsSyncing(false);
+    }
+  };
 
   // Branding Form State
   const [inputTitle, setInputTitle] = useState(appTitle);
@@ -196,7 +525,7 @@ export const SettingView: React.FC = () => {
       username,
       nama: namaUser,
       role: roleUser,
-      password: passwordUser || '123456',
+      password: passwordUser || '',
       status: 'Aktif'
     });
     setIsAddUserOpen(false);
@@ -245,6 +574,184 @@ export const SettingView: React.FC = () => {
     setAdminPinInput('');
     setPinErrorMessage('');
     alert('Sistem WMS berhasil direset ke data default awal!');
+  };
+
+  const handleDownloadBackup = () => {
+    // 1. Map Master Material (Bahan Baku)
+    const masterMaterialSheet = materials.map((m, idx) => ({
+      'No': idx + 1,
+      'ID Material': m.id,
+      'Nama Barang': m.nama,
+      'Kode SKU': m.sku,
+      'Kategori': m.kategori,
+      'Satuan': m.satuan,
+      'Stok Sistem': m.currentStock,
+      'Limit Minimum': m.minimumStock,
+      'Lokasi Simpan': m.lokasiUtama || 'Gedung A1'
+    }));
+
+    // 2. Map Master Vendor (Supplier)
+    const masterVendorSheet = vendors.map((v, idx) => ({
+      'No': idx + 1,
+      'ID Vendor': v.id,
+      'Nama Vendor': v.nama,
+      'Kontak Person': v.kontak,
+      'No Telepon': v.telepon,
+      'Alamat Pemasok': v.alamat
+    }));
+
+    // 3. Map Master Gedung & Zona (Gudang)
+    const masterGedungSheet = gedungList.map((g, idx) => ({
+      'No': idx + 1,
+      'ID Gedung': g.id,
+      'Nama Gedung': g.nama,
+      'Zona / Lokasi': g.zona,
+      'Kapasitas Pallet': g.kapasitasPallet,
+      'Pallet Terisi': g.palletTerisi,
+      'Deskripsi Gedung': g.deskripsi
+    }));
+
+    // 4. Map Master Pengguna (Users)
+    const masterUserSheet = users.map((u, idx) => ({
+      'No': idx + 1,
+      'ID User': u.id,
+      'Username': u.username,
+      'Nama Lengkap': u.nama,
+      'Role Akses': u.role,
+      'Status Akun': u.status
+    }));
+
+    // 5. Flatten Transaksi Incoming
+    const incomingSheet: any[] = [];
+    incomingHeaders.forEach(h => {
+      h.details.forEach(d => {
+        incomingSheet.push({
+          'ID Transaksi': h.id,
+          'No Receiving': h.noReceiving,
+          'Tanggal Penerimaan': h.tanggal,
+          'Nama Vendor': h.vendor,
+          'Nomor PO': h.nomorPO,
+          'No Surat Jalan': h.noSuratJalan,
+          'Plat Kendaraan': h.platKendaraan,
+          'Pallet Masuk': h.palletInCount,
+          'ID Material': d.materialId,
+          'Nama Barang': d.namaBarang,
+          'Qty Kirim': d.qtyKirim,
+          'Qty Diterima': d.qtyDiterima,
+          'Qty Reject': d.qtyReject,
+          'Alasan Reject': d.alasanReject || '',
+          'Lokasi Penyimpanan': d.lokasiSimpan || ''
+        });
+      });
+    });
+
+    // 6. Flatten Transaksi Outbound
+    const outboundSheet: any[] = [];
+    outboundHeaders.forEach(o => {
+      o.details.forEach(d => {
+        outboundSheet.push({
+          'ID Transaksi': o.id,
+          'No DO/SJ': o.nomorDOSJ,
+          'Customer': o.customer,
+          'Tanggal Pengiriman': o.tanggal,
+          'Ekspedisi': o.ekspedisi,
+          'Pallet Keluar': o.palletOutCount,
+          'No Kendaraan': o.noKendaraan || '',
+          'ID Material': d.materialId,
+          'Nama Barang': d.namaBarang,
+          'Qty Keluar': d.qty,
+          'Lokasi Asal': d.lokasiAsal || ''
+        });
+      });
+    });
+
+    // 7. Barang Reject
+    const rejectSheet = rejects.map((r, idx) => ({
+      'No': idx + 1,
+      'ID Reject': r.id,
+      'Tanggal': r.tanggal,
+      'ID Material': r.materialId,
+      'Nama Barang': r.namaBarang,
+      'PO Pembelian': r.poPembelian,
+      'Vendor': r.vendor,
+      'Qty Reject': r.qtyReject,
+      'Alasan': r.alasanReject,
+      'No Dokumen Retur': r.poReturDokumen,
+      'Status Retur': r.status
+    }));
+
+    // 8. Put Away
+    const putAwaySheet = putAways.map((p, idx) => ({
+      'No': idx + 1,
+      'ID Put Away': p.id,
+      'No Receiving': p.noReceiving,
+      'ID Material': p.materialId,
+      'Nama Barang': p.namaBarang,
+      'Qty Put Away': p.qty,
+      'Gedung / Lokasi': p.gedung,
+      'Status': p.status
+    }));
+
+    // 9. Stock Opname
+    const stockOpnameSheet = stockOpnames.map((s, idx) => ({
+      'No': idx + 1,
+      'ID Opname': s.id,
+      'Tanggal Opname': s.tanggal,
+      'ID Material': s.materialId,
+      'Nama Barang': s.namaBarang,
+      'Qty Sistem': s.qtySistem,
+      'Qty Fisik': s.qtyFisik,
+      'Selisih / Varian': s.selisih,
+      'Penyebab Selisih': s.penyebab,
+      'Status Penyesuaian': s.status,
+      'PIC Pemeriksa': s.pic
+    }));
+
+    // 10. Mutasi Barang (Antar Gudang)
+    const mutasiSheet = mutasis.map((m, idx) => ({
+      'No': idx + 1,
+      'ID Mutasi': m.id,
+      'Tanggal Mutasi': m.tanggal,
+      'ID Material': m.materialId,
+      'Nama Barang': m.namaBarang,
+      'Qty Mutasi': m.qty,
+      'Dari Lokasi': m.dariLokasi,
+      'Ke Lokasi': m.keLokasi,
+      'Keterangan': m.keterangan || '',
+      'PIC Mutasi': m.pic
+    }));
+
+    // 11. Kartu Stock (Buku Besar Mutasi)
+    const kartuStockSheet = kartuStocks.map((k, idx) => ({
+      'No': idx + 1,
+      'ID Entry': k.id,
+      'Tanggal Log': k.tanggal,
+      'ID Material': k.materialId,
+      'Jenis Mutasi': k.jenisTransaksi,
+      'Referensi No': k.refNo,
+      'Jumlah Masuk': k.masuk,
+      'Jumlah Keluar': k.keluar,
+      'Saldo Akhir': k.saldo,
+      'Keterangan': k.keterangan || '',
+      'Lokasi Penyimpanan': k.lokasi || ''
+    }));
+
+    // List of tables for multi-sheet workbook
+    const sheets = [
+      { name: 'Master_Material', data: masterMaterialSheet },
+      { name: 'Master_Vendor', data: masterVendorSheet },
+      { name: 'Master_Gedung', data: masterGedungSheet },
+      { name: 'Master_User', data: masterUserSheet },
+      { name: 'Incoming_Barang', data: incomingSheet },
+      { name: 'Outbound_Barang', data: outboundSheet },
+      { name: 'Barang_Reject', data: rejectSheet },
+      { name: 'Put_Away', data: putAwaySheet },
+      { name: 'Stock_Opname', data: stockOpnameSheet },
+      { name: 'Mutasi_Internal', data: mutasiSheet },
+      { name: 'Kartu_Stock', data: kartuStockSheet }
+    ];
+
+    exportAllWmsToExcel(sheets);
   };
 
   const menuList: { key: MenuKey; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
@@ -394,6 +901,21 @@ export const SettingView: React.FC = () => {
           <Layers className="w-4 h-4" />
           <span>8. Master Kategori & Satuan</span>
         </button>
+
+        <button
+          disabled={currentUser.role !== 'Admin'}
+          onClick={() => setActiveTab('backup')}
+          className={`px-3.5 py-2 text-xs font-semibold rounded-xl flex items-center space-x-2 transition-all whitespace-nowrap ${
+            currentUser.role !== 'Admin' ? 'opacity-50 cursor-not-allowed' : ''
+          } ${
+            activeTab === 'backup' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+          title={currentUser.role !== 'Admin' ? 'Akses Terbatas: Hanya untuk Admin' : 'Backup Data ke Spreadsheet'}
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          <span>9. Backup & Cadangan Data</span>
+          {currentUser.role !== 'Admin' && <Lock className="w-3 h-3 text-slate-400" />}
+        </button>
       </div>
 
       {/* TAB 1: LOGO FOTO & JUDUL BRANDING WMS */}
@@ -436,7 +958,7 @@ export const SettingView: React.FC = () => {
               )}
               <div>
                 <p className="font-bold text-sm text-white">{inputTitle || 'WMS Gudang'}</p>
-                <p className="text-[11px] text-slate-300">Sistem Manajemen Gudang & Logistik Real-Time</p>
+                <p className="text-[11px] text-slate-300">Sistem Manajemen Gudang Sewa Pancawati</p>
               </div>
             </div>
           </div>
@@ -486,7 +1008,7 @@ export const SettingView: React.FC = () => {
                   value={inputTitle}
                   disabled={currentUser.role !== 'Admin'}
                   onChange={(e) => setInputTitle(e.target.value)}
-                  placeholder="Contoh: WMS Gudang, WMS Logistik ABC"
+                  placeholder="Contoh: WMS Gudang Pancawati"
                   className="w-full px-3.5 py-2.5 text-xs font-semibold border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <p className="text-[11px] text-slate-500">
@@ -547,9 +1069,9 @@ export const SettingView: React.FC = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
             <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
                 <tr>
                   <th className="p-3 w-1/3">Nama Menu WMS</th>
                   <th className="p-3 text-center w-1/5">
@@ -654,7 +1176,7 @@ export const SettingView: React.FC = () => {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <KeyRound className="w-4 h-4 text-amber-600" />
-                  <span>Matriks Otoritas Khusus Tingkat Lanjut (Admin Privileges)</span>
+                  <span>Matriks Otoritas Khusus Admin</span>
                 </h3>
                 <p className="text-xs text-slate-500">
                   Konfigurasi tindakan kritis yang hanya boleh dilakukan oleh Administrator utama.
@@ -735,7 +1257,7 @@ export const SettingView: React.FC = () => {
               {/* Edit Warehouse Capacity */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-bold text-slate-900">Ubah Kapasitas Gedung & Rak</p>
+                  <p className="text-xs font-bold text-slate-900">Ubah Kapasitas Gedung</p>
                   <p className="text-[11px] text-slate-500">Otoritas menambah gedung baru & mengubah limit pallet.</p>
                 </div>
                 <button
@@ -787,7 +1309,7 @@ export const SettingView: React.FC = () => {
                 <div>
                   <h4 className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
                     <AlertOctagon className="w-4 h-4 text-rose-600" />
-                    <span>Danger Zone: Reset & Re-Inisialisasi Data Sistem WMS</span>
+                    <span>Danger Zone:Re-Inisialisasi Data Sistem WMS</span>
                   </h4>
                   <p className="text-[11px] text-rose-700 mt-0.5">
                     Mengembalikan seluruh stok barang, incoming, outbound, gedung, & user ke data awal default pabrik.
@@ -1326,9 +1848,9 @@ export const SettingView: React.FC = () => {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
             <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
                 <tr>
                   <th className="p-3">User ID</th>
                   <th className="p-3">Username</th>
@@ -1388,7 +1910,7 @@ export const SettingView: React.FC = () => {
           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div>
               <h3 className="text-sm font-bold text-slate-900">Daftar Master Vendor Supplier</h3>
-              <p className="text-xs text-slate-500">Pemasok bahan baku raw material, packaging, dan sparepart.</p>
+              <p className="text-xs text-slate-500">Pemasok bahan baku raw material, packaging.</p>
             </div>
             <button
               disabled={currentUser.role !== 'Admin'}
@@ -1400,9 +1922,9 @@ export const SettingView: React.FC = () => {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
             <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
                 <tr>
                   <th className="p-3">Nama Perusahaan Vendor</th>
                   <th className="p-3">Alamat Pabrik/Gudang</th>
@@ -1594,12 +2116,330 @@ export const SettingView: React.FC = () => {
         </div>
       )}
 
+      {/* TAB 9: BACKUP & EKSPOR DATA KE SPREADSHEET */}
+      {activeTab === 'backup' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
+          <div className="border-b border-slate-200 pb-4">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <span>Backup Database & Transaksi WMS (Ekspor Full Spreadsheet)</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Ekspor seluruh database master dan seluruh riwayat transaksi logistik gudang pancawati ke dalam satu file Microsoft Excel (.xlsx) yang rapi, lengkap, dan terbagi per lembar kerja (multi-sheet).
+            </p>
+          </div>
+
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 text-xs space-y-1">
+            <span className="font-bold block text-emerald-800">💡 Informasi Cadangan Lokal:</span>
+            <p className="leading-relaxed">
+              Seluruh data transaksi dan master yang tersimpan di sistem Cloud Firestore saat ini dapat diunduh untuk kebutuhan audit, backup offline, pelaporan manajemen, atau transfer data. File spreadsheet ini berisi 11 lembar kerja (sheets) terpisah untuk setiap kategori data.
+            </p>
+          </div>
+
+          {/* Records Summary Grid */}
+          <div className="space-y-3">
+            <p className="text-xs font-bold text-slate-800">Daftar Data yang akan Di-backup:</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Master Barang</p>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-xl font-black text-slate-800">{materials.length}</span>
+                  <span className="text-[10px] font-semibold text-slate-500">item</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Master Vendor</p>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-xl font-black text-slate-800">{vendors.length}</span>
+                  <span className="text-[10px] font-semibold text-slate-500">pemasok</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Master Gedung & Zona</p>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-xl font-black text-slate-800">{gedungList.length}</span>
+                  <span className="text-[10px] font-semibold text-slate-500">gudang</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Master Pengguna</p>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-xl font-black text-slate-800">{users.length}</span>
+                  <span className="text-[10px] font-semibold text-slate-500">user</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Log Incoming</p>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-xl font-black text-slate-800">
+                    {incomingHeaders.reduce((sum, h) => sum + h.details.length, 0)}
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-500">penerimaan</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Log Outbound</p>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-xl font-black text-slate-800">
+                    {outboundHeaders.reduce((sum, o) => sum + o.details.length, 0)}
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-500">pengiriman</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Stock Opname & Mutasi</p>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-xl font-black text-slate-800">
+                    {stockOpnames.length + mutasis.length}
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-500">aktivitas</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entry Kartu Stok</p>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-xl font-black text-slate-800">{kartuStocks.length}</span>
+                  <span className="text-[10px] font-semibold text-slate-500">baris</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Action trigger panels */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Opsi 1: Backup Lokal Excel */}
+            <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">Opsi 1: Backup Offline (.xlsx)</h4>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Ekspor dan unduh seluruh database saat ini ke dalam 1 file Microsoft Excel terkompresi dengan 11 lembar kerja terstruktur (Master data, logistik incoming/outbound, kartu stok, opname, dsb).
+                </p>
+              </div>
+              
+              <div className="space-y-3 pt-2">
+                <button
+                  onClick={handleDownloadBackup}
+                  className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-95"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Ekspor & Unduh Backup Spreadsheet</span>
+                </button>
+                <p className="text-[10px] text-slate-400 italic text-center">
+                  Format: WMS_Gudang_Full_Report_[TANGGAL].xlsx
+                </p>
+              </div>
+            </div>
+
+            {/* Opsi 2: Backup Cloud Google Sheets */}
+            <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
+                    <Cloud className="w-5 h-5" />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">Opsi 2: Backup Cloud (Google Sheets)</h4>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isGsAuthenticated ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
+                  {isGsAuthenticated ? 'Terhubung' : 'Terputus'}
+                </span>
+              </div>
+
+              {/* Status & Login Controls */}
+              {!isGsAuthenticated ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-6 text-center space-y-3">
+                  <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+                    Hubungkan akun Google Drive untuk mencadangkan seluruh data master dan log transaksi secara real-time ke Google Spreadsheet online.
+                  </p>
+                  <button
+                    onClick={handleGoogleLogin}
+                    className="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-2 cursor-pointer"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                    <span>Hubungkan dengan Google</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4 flex-1">
+                  {/* Google Profile Info */}
+                  <div className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl">
+                    <div className="flex items-center space-x-2.5">
+                      {gsUser?.photoURL ? (
+                        <img 
+                          src={gsUser.photoURL} 
+                          referrerPolicy="no-referrer" 
+                          alt="Google Profile" 
+                          className="w-8 h-8 rounded-full border border-slate-200" 
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
+                          {gsUser?.displayName?.substring(0, 2).toUpperCase() || 'GS'}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs font-bold text-slate-800 leading-tight">{gsUser?.displayName || 'Google User'}</p>
+                        <p className="text-[10px] text-slate-500">{gsUser?.email}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleGoogleLogout}
+                      className="px-2 py-1 text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition-all"
+                    >
+                      Putuskan
+                    </button>
+                  </div>
+
+                  {/* Spreadsheet Selection / Creation */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Select Existing */}
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pilih Spreadsheet Aktif</label>
+                      <div className="flex space-x-1.5">
+                        <select
+                          className="flex-1 bg-white border border-slate-200 rounded-xl p-2 text-xs text-slate-800 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                          value={selectedGsSpreadsheet?.id || ''}
+                          onChange={(e) => {
+                            const found = gsSpreadsheets.find(s => s.id === e.target.value);
+                            if (found) handleSelectSpreadsheet(found);
+                          }}
+                        >
+                          <option value="">-- Pilih Spreadsheet --</option>
+                          {gsSpreadsheets.map((sheet) => (
+                            <option key={sheet.id} value={sheet.id}>
+                              {sheet.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          disabled={isFetchingGsSheets}
+                          onClick={() => gsToken && loadUserSpreadsheets(gsToken)}
+                          className="p-2 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-all text-slate-600 cursor-pointer disabled:opacity-50"
+                          title="Refresh daftar spreadsheet"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isFetchingGsSheets ? 'animate-spin' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Create New */}
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Buat Baru</label>
+                      <div className="flex space-x-1.5">
+                        <input
+                          type="text"
+                          placeholder="Nama Spreadsheet Baru"
+                          className="flex-1 bg-white border border-slate-200 rounded-xl p-2 text-xs text-slate-800 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                          value={newGsSheetTitle}
+                          onChange={(e) => setNewGsSheetTitle(e.target.value)}
+                        />
+                        <button
+                          disabled={isCreatingGsSheet || !newGsSheetTitle.trim()}
+                          onClick={handleCreateNewSpreadsheet}
+                          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer"
+                        >
+                          {isCreatingGsSheet ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <span>Buat</span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Connected Target & Sync Button */}
+                  {selectedGsSpreadsheet && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <p className="text-[10px] font-semibold text-emerald-800">Target Sinkronisasi Cloud:</p>
+                          <p className="text-xs font-bold text-slate-900">{selectedGsSpreadsheet.name}</p>
+                        </div>
+                        {selectedGsSpreadsheet.webViewLink && (
+                          <a
+                            href={selectedGsSpreadsheet.webViewLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold flex items-center space-x-1 underline"
+                          >
+                            <span>Buka Sheet</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+
+                      <button
+                        disabled={isGsSyncing}
+                        onClick={handleSyncAllToGoogleSheets}
+                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {isGsSyncing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Menyinkronkan data...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CloudUpload className="w-4 h-4" />
+                            <span>Sinkronkan & Cadangkan Sekarang</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Status Alert logs */}
+              {(gsError || gsSuccess) && (
+                <div className="pt-2">
+                  {gsError && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-[10px] font-medium flex items-start space-x-1.5">
+                      <span className="font-bold">❌ Error:</span>
+                      <p className="flex-1">{gsError}</p>
+                    </div>
+                  )}
+                  {gsSuccess && (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-[10px] font-medium flex items-start space-x-1.5">
+                      <span className="font-bold">✅ Sukses:</span>
+                      <p className="flex-1">{gsSuccess}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL ADD USER */}
       {isAddUserOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden text-slate-800">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-              <h3 className="font-bold text-slate-900 text-sm">Tambah User Pengguna WMS</h3>
+              <h3 className="font-bold text-slate-900 text-sm">Tambah User</h3>
               <button onClick={() => setIsAddUserOpen(false)} className="text-slate-400 hover:text-slate-700 font-bold">✕</button>
             </div>
             <form onSubmit={handleCreateUser} className="p-6 space-y-3">
@@ -1676,7 +2516,7 @@ export const SettingView: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-700 font-semibold mb-1">Alamat Pabrik / Gudang</label>
+                <label className="block text-xs text-slate-700 font-semibold mb-1">Alamat PT / Gudang</label>
                 <textarea
                   rows={3}
                   placeholder="Contoh: Jl. Industri Raya No. 45, Cikarang"
@@ -1707,7 +2547,7 @@ export const SettingView: React.FC = () => {
             </div>
             <div className="p-6 space-y-4">
               <p className="text-xs text-slate-600 leading-relaxed">
-                Tindakan ini akan menghapus semua histori transaksi, incoming, outbound, mutasi, dan mengembalikan seluruh master data ke kondisi awal pabrik.
+                Tindakan ini akan menghapus semua histori transaksi, incoming, outbound, dan mengembalikan seluruh master data ke kondisi awal pabrik.
               </p>
 
               {adminAuthorities.requirePinForAdminAction && (

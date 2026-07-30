@@ -97,9 +97,9 @@ export const MonitoringRejectView: React.FC = () => {
 
       {/* Rejects Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
               <tr>
                 <th className="p-3.5">Tanggal</th>
                 <th className="p-3.5">Material ID / Nama</th>

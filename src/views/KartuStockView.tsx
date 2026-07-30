@@ -1,5 +1,24 @@
 import React, { useState } from 'react';
-import { CreditCard, Search, FileSpreadsheet, Printer, Boxes } from 'lucide-react';
+import {
+  CreditCard,
+  Search,
+  FileSpreadsheet,
+  Printer,
+  Boxes,
+  TrendingUp,
+  ArrowDownCircle,
+  ArrowUpCircle
+} from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend
+} from 'recharts';
 import { useWms } from '../context/WmsContext';
 import { exportToExcel, exportToPDF } from '../utils/exportUtils';
 
@@ -7,14 +26,102 @@ export const KartuStockView: React.FC = () => {
   const { currentUser, kartuStocks, materials } = useWms();
 
   const [selectedMaterialId, setSelectedMaterialId] = useState<string>(materials[0]?.id || '');
+  const [chartMode, setChartMode] = useState<'selected' | 'all'>('selected');
 
   const activeMaterialId = selectedMaterialId || materials[0]?.id || '';
   const selectedMaterial = materials.find(m => m.id === activeMaterialId) || materials[0];
 
   // Filter & sort ledger entries for selected material
-  const filteredEntries = kartuStocks
+  const sortedEntries = kartuStocks
     .filter(k => k.materialId === activeMaterialId)
-    .sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+    .sort((a, b) => {
+      const dateCompare = a.tanggal.localeCompare(b.tanggal);
+      if (dateCompare !== 0) return dateCompare;
+      return a.id.localeCompare(b.id);
+    });
+
+  // Dynamically calculate accurate running balance
+  let runningBalance = 0;
+  const filteredEntries = sortedEntries.map(e => {
+    runningBalance = runningBalance + e.masuk - e.keluar;
+    return {
+      ...e,
+      saldo: runningBalance
+    };
+  });
+
+  // Generate last 30 days date list (YYYY-MM-DD)
+  const last30Days = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (29 - i));
+    return d.toISOString().split('T')[0];
+  });
+
+  // Chart data computation
+  const chartData = last30Days.map(date => {
+    const entriesOnDate = kartuStocks.filter(k => {
+      const matchesDate = k.tanggal === date;
+      const matchesMaterial = chartMode === 'all' || k.materialId === activeMaterialId;
+      return matchesDate && matchesMaterial;
+    });
+
+    const totalIn = entriesOnDate.reduce((sum, e) => sum + e.masuk, 0);
+    const totalOut = entriesOnDate.reduce((sum, e) => sum + e.keluar, 0);
+
+    return {
+      date,
+      'Masuk (In)': totalIn,
+      'Keluar (Out)': totalOut,
+    };
+  });
+
+  const totalIn30Days = chartData.reduce((sum, d) => sum + d['Masuk (In)'], 0);
+  const totalOut30Days = chartData.reduce((sum, d) => sum + d['Keluar (Out)'], 0);
+  const netFlow30Days = totalIn30Days - totalOut30Days;
+
+  const formatXAxis = (tickItem: string) => {
+    try {
+      const parts = tickItem.split('-');
+      if (parts.length === 3) {
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        const day = parseInt(parts[2], 10);
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        return `${day} ${months[monthIdx]}`;
+      }
+    } catch (e) {}
+    return tickItem;
+  };
+
+  const formatDateIndo = (dateStr: string) => {
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+        const day = parseInt(parts[2], 10);
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        const year = parts[0];
+        return `${day} ${months[monthIdx]} ${year}`;
+      }
+    } catch (e) {}
+    return dateStr;
+  };
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-lg space-y-1 text-xs">
+          <p className="font-bold text-slate-700">{formatDateIndo(label)}</p>
+          {payload.map((pld: any) => (
+            <p key={pld.name} className="font-semibold flex items-center gap-1.5" style={{ color: pld.color }}>
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: pld.color }} />
+              <span>{pld.name}: {pld.value} {chartMode === 'selected' ? selectedMaterial?.satuan : 'Unit'}</span>
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
 
   const handleExportExcel = () => {
     if (!selectedMaterial) return;
@@ -48,7 +155,7 @@ export const KartuStockView: React.FC = () => {
       columns,
       rows,
       `Kartu_Stok_${selectedMaterial.id}`,
-      `Nama Barang: ${selectedMaterial.namaBarang} | Satuan: ${selectedMaterial.satuan} | Kategori: ${selectedMaterial.kategori}`
+      `Nama Barang: ${selectedMaterial.namaBarang || selectedMaterial.nama} | Satuan: ${selectedMaterial.satuan} | Kategori: ${selectedMaterial.kategori}`
     );
   };
 
@@ -102,10 +209,10 @@ export const KartuStockView: React.FC = () => {
             <select
               value={selectedMaterialId}
               onChange={e => setSelectedMaterialId(e.target.value)}
-              className="bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900 rounded-xl px-3 py-1.5 focus:outline-none focus:border-indigo-500 mt-1"
+              className="bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900 rounded-xl px-3 py-1.5 focus:outline-none focus:border-indigo-500 mt-1 cursor-pointer"
             >
               {materials.map(m => (
-                <option key={m.id} value={m.id}>{m.id} - {m.namaBarang}</option>
+                <option key={m.id} value={m.id}>{m.id} - {m.namaBarang || m.nama}</option>
               ))}
             </select>
           </div>
@@ -126,11 +233,140 @@ export const KartuStockView: React.FC = () => {
         )}
       </div>
 
+      {/* 30-Day Movement Trend Chart */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+              <TrendingUp className="w-4 h-4 text-indigo-600" />
+              <span>Tren Aliran Masuk & Keluar (30 Hari Terakhir)</span>
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Grafik perbandingan volume barang masuk vs keluar untuk mendeteksi tingkat perputaran.
+            </p>
+          </div>
+
+          {/* Toggle buttons */}
+          <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200 self-start sm:self-auto">
+            <button
+              onClick={() => setChartMode('selected')}
+              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                chartMode === 'selected'
+                  ? 'bg-white text-indigo-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Material Terpilih
+            </button>
+            <button
+              onClick={() => setChartMode('all')}
+              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                chartMode === 'all'
+                  ? 'bg-white text-indigo-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Semua Material
+            </button>
+          </div>
+        </div>
+
+        {/* Mini stats bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Total Masuk (In)</p>
+              <p className="text-lg font-black text-emerald-700 mt-1">
+                +{totalIn30Days} <span className="text-xs font-normal text-emerald-600">{chartMode === 'selected' ? selectedMaterial?.satuan : 'Unit'}</span>
+              </p>
+            </div>
+            <ArrowDownCircle className="w-8 h-8 text-emerald-500/30" />
+          </div>
+
+          <div className="p-4 bg-rose-50/50 border border-rose-100 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Total Keluar (Out)</p>
+              <p className="text-lg font-black text-rose-700 mt-1">
+                -{totalOut30Days} <span className="text-xs font-normal text-rose-600">{chartMode === 'selected' ? selectedMaterial?.satuan : 'Unit'}</span>
+              </p>
+            </div>
+            <ArrowUpCircle className="w-8 h-8 text-rose-500/30" />
+          </div>
+
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sisa Bersih (Net Flow)</p>
+              <p className={`text-lg font-black mt-1 ${netFlow30Days >= 0 ? 'text-slate-800' : 'text-rose-700'}`}>
+                {netFlow30Days > 0 ? `+${netFlow30Days}` : netFlow30Days} <span className="text-xs font-normal text-slate-500">{chartMode === 'selected' ? selectedMaterial?.satuan : 'Unit'}</span>
+              </p>
+            </div>
+            <div className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-400">
+              <TrendingUp className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+
+        {/* Recharts Container */}
+        <div className="w-full h-[320px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorIn" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorOut" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2}/>
+                  <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatXAxis}
+                tick={{ fill: '#64748b', fontSize: 10, fontWeight: 500 }}
+                axisLine={{ stroke: '#e2e8f0' }}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fill: '#64748b', fontSize: 10, fontWeight: 500 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend
+                verticalAlign="top"
+                height={36}
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 11, fontWeight: 600, color: '#475569' }}
+              />
+              <Area
+                type="monotone"
+                dataKey="Masuk (In)"
+                stroke="#10b981"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorIn)"
+              />
+              <Area
+                type="monotone"
+                dataKey="Keluar (Out)"
+                stroke="#f43f5e"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorOut)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
       {/* Ledger Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
               <tr>
                 <th className="p-3.5">Tanggal</th>
                 <th className="p-3.5">Jenis Transaksi</th>

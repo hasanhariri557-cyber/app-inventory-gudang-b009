@@ -75,7 +75,7 @@ export const LoginView: React.FC = () => {
             {appTitle || 'WMS Gudang'}
           </h2>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            Sistem Manajemen Gudang & Logistik Real-Time
+            Sistem Manajemen Gudang Sewa Pancawati
           </p>
         </div>
 
@@ -150,7 +150,7 @@ export const LoginView: React.FC = () => {
 
       {/* Footer copyright */}
       <div className="text-slate-400 text-[10px] text-center mt-6 z-10">
-        &copy; {new Date().getFullYear()} {appTitle || 'WMS Gudang'} • Sistem Terintegrasi Multi-Role
+        &copy; {new Date().getFullYear()} {appTitle || 'WMS Gudang'} • Powered By Hasan Hariri
       </div>
 
     </div>
