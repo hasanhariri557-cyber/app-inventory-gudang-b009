@@ -118,7 +118,14 @@ export const DashboardView: React.FC = () => {
     return stockOpnames.filter(s => filteredMaterialIds.has(s.materialId));
   }, [stockOpnames, kategoriFilter, filteredMaterialIds]);
 
-  const today = new Date().toISOString().split('T')[0];
+  const getLocalDate = (daysAgo: number) => {
+    const d = new Date();
+    const offset = d.getTimezoneOffset();
+    const localDate = new Date(d.getTime() - (offset * 60 * 1000) - (daysAgo * 24 * 60 * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
+  };
+
+  const today = getLocalDate(0);
   const filteredMobilMasukHariIni = React.useMemo(() => {
     return new Set(
       filteredIncomingHeaders.filter(h => h.tanggal === today).map(h => h.platKendaraan)
@@ -263,26 +270,63 @@ _Dikirim dari Sistem WMS Pergudangan_`;
     showNotification('Berhasil Diarahkan ke WhatsApp', 'Pesan ringkasan statistik WMS telah disiapkan untuk dibagikan.', 'info', 'Dashboard');
   };
 
-  // Mock trend data for charts based on last 7 days
-  const incomingVsOutboundData = [
-    { tanggal: '18 Jul', incoming: 1200, outbound: 800 },
-    { tanggal: '19 Jul', incoming: 1500, outbound: 1100 },
-    { tanggal: '20 Jul', incoming: 900, outbound: 1300 },
-    { tanggal: '21 Jul', incoming: 1800, outbound: 1500 },
-    { tanggal: '22 Jul', incoming: 1100, outbound: 950 },
-    { tanggal: '23 Jul', incoming: 1400, outbound: 1200 },
-    { tanggal: '24 Jul (Hari Ini)', incoming: filteredIncomingHeaders.length * 300 + 200, outbound: filteredOutboundHeaders.length * 200 + 150 }
-  ];
+  const formatDisplayDate = (dateStr: string, isToday: boolean) => {
+    const [year, month, day] = dateStr.split('-');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+    const monthIdx = parseInt(month, 10) - 1;
+    const monthName = months[monthIdx] || '';
+    const formatted = `${parseInt(day, 10)} ${monthName}`;
+    return isToday ? `${formatted} (Hari Ini)` : formatted;
+  };
 
-  const palletInVsOutData = [
-    { tanggal: '18 Jul', palletIn: 15, palletOut: 10 },
-    { tanggal: '19 Jul', palletIn: 22, palletOut: 18 },
-    { tanggal: '20 Jul', palletIn: 12, palletOut: 25 },
-    { tanggal: '21 Jul', palletIn: 30, palletOut: 20 },
-    { tanggal: '22 Jul', palletIn: 18, palletOut: 14 },
-    { tanggal: '23 Jul', palletIn: 25, palletOut: 22 },
-    { tanggal: '24 Jul', palletIn: filteredPalletIn, palletOut: filteredPalletOut }
-  ];
+  // Dynamic trend data for charts based on last 7 days of actual transactions
+  const incomingVsOutboundData = React.useMemo(() => {
+    const data = [];
+    for (let i = 6; i >= 0; i--) {
+      const dStr = getLocalDate(i);
+      const isTodayStr = dStr === today;
+      const label = formatDisplayDate(dStr, isTodayStr);
+      
+      const incomingTotal = filteredIncomingHeaders
+        .filter(h => h.tanggal === dStr)
+        .reduce((sum, h) => sum + h.details.reduce((subSum, d) => subSum + (d.qtyDiterima || 0), 0), 0);
+        
+      const outboundTotal = filteredOutboundHeaders
+        .filter(o => o.tanggal === dStr)
+        .reduce((sum, o) => sum + o.details.reduce((subSum, d) => subSum + (d.qty || 0), 0), 0);
+        
+      data.push({
+        tanggal: label,
+        incoming: incomingTotal,
+        outbound: outboundTotal,
+      });
+    }
+    return data;
+  }, [filteredIncomingHeaders, filteredOutboundHeaders, today]);
+
+  const palletInVsOutData = React.useMemo(() => {
+    const data = [];
+    for (let i = 6; i >= 0; i--) {
+      const dStr = getLocalDate(i);
+      const isTodayStr = dStr === today;
+      const label = formatDisplayDate(dStr, isTodayStr);
+      
+      const palletInTotal = filteredIncomingHeaders
+        .filter(h => h.tanggal === dStr)
+        .reduce((sum, h) => sum + (h.palletInCount || 0), 0);
+        
+      const palletOutTotal = filteredOutboundHeaders
+        .filter(o => o.tanggal === dStr)
+        .reduce((sum, o) => sum + (o.palletOutCount || 0), 0);
+        
+      data.push({
+        tanggal: label,
+        palletIn: palletInTotal,
+        palletOut: palletOutTotal,
+      });
+    }
+    return data;
+  }, [filteredIncomingHeaders, filteredOutboundHeaders, today]);
 
   const stockOpnamePieData = [
     { name: 'Balance (Sesuai)', value: totalMaterialBalance || 1, color: '#10B981' },

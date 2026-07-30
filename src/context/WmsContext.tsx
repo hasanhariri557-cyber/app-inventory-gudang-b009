@@ -190,10 +190,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_USERS;
   });
 
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_isLoggedIn`);
-    return saved !== 'false';
-  });
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
   const [currentUser, setCurrentUser] = useState<User>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_currentUser`);
