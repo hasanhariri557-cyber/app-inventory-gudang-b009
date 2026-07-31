@@ -665,16 +665,16 @@ export const StockOpnameView: React.FC = () => {
       {/* BULK CATEGORY STOCK OPNAME MODAL (Jobdesk PIC Split) */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-950/50 backdrop-blur-xs">
-          <div className="bg-white border border-slate-200 rounded-none sm:rounded-2xl w-full max-w-4xl h-full sm:h-auto max-h-screen sm:max-h-[90vh] shadow-2xl overflow-hidden text-slate-800 flex flex-col">
+          <div className="bg-white border-0 sm:border border-slate-200 rounded-none sm:rounded-2xl w-full max-w-4xl h-full sm:h-auto max-h-screen sm:max-h-[90vh] shadow-2xl overflow-hidden text-slate-800 flex flex-col">
             
             {/* Modal Header */}
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+            <div className="px-4 py-3 sm:px-6 sm:py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
               <div className="flex items-center space-x-2.5">
                 <div className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
                   <Layers className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">
+                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">
                     Pecah Opname Fisik per Kategori (PIC Jobdesk)
                   </h3>
                   <p className="text-[10px] text-slate-500 mt-0.5">
@@ -684,14 +684,14 @@ export const StockOpnameView: React.FC = () => {
               </div>
               <button
                 onClick={() => setIsBulkModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 font-bold"
+                className="text-slate-400 hover:text-slate-700 font-bold p-1 text-sm cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="overflow-y-auto p-6 flex-1 space-y-6">
+            <div className="overflow-y-auto p-3 sm:p-6 flex-1 space-y-4 sm:space-y-6">
               
               {/* STEP 1: Select Category */}
               {!selectedBulkCategory ? (
@@ -739,32 +739,37 @@ export const StockOpnameView: React.FC = () => {
               ) : (
                 
                 // STEP 2: Input List for Selected Category
-                <form onSubmit={handleBulkSubmit} className="space-y-4">
+                <form onSubmit={handleBulkSubmit} className="flex-1 flex flex-col overflow-hidden">
                   
                   {/* Category Banner */}
-                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
                     <div>
                       <span className="text-[10px] font-bold text-indigo-700 tracking-wider uppercase bg-indigo-100 px-2 py-0.5 rounded-md">Kategori Terpilih</span>
                       <h4 className="text-base font-bold text-indigo-950 mt-1 capitalize">{selectedBulkCategory}</h4>
-                      <p className="text-xs text-indigo-800/80 mt-0.5">Ditemukan {bulkCategoryMaterials.length} material terdaftar aktif dalam kategori ini.</p>
+                      <p className="text-xs text-indigo-800/80 mt-0.5">Ditemukan {bulkCategoryMaterials.length} material terdaftar aktif.</p>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => setSelectedBulkCategory(null)}
-                      className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-semibold rounded-lg transition-all"
+                      className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-semibold rounded-lg transition-all self-start sm:self-center cursor-pointer"
                     >
                       Kembali Pilih Kategori Lain
                     </button>
                   </div>
 
-                  {/* Bulk Items Grid/Table */}
-                  {bulkCategoryMaterials.length === 0 ? (
-                    <div className="p-12 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-slate-200">
-                      Tidak ada material aktif di kategori ini. Silakan tambahkan material atau aktifkan statusnya di Master Data.
-                    </div>
-                  ) : (
-                    <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                  {/* Scrollable list of items */}
+                  <div className="overflow-y-auto p-1 sm:p-2 flex-1 space-y-4">
+                    
+                    {/* Bulk Items Grid/Table */}
+                    {bulkCategoryMaterials.length === 0 ? (
+                      <div className="p-12 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-slate-200">
+                        Tidak ada material aktif di kategori ini. Silakan tambahkan material atau aktifkan statusnya di Master Data.
+                      </div>
+                    ) : (
+                      <>
+                        {/* DESKTOP TABLE VIEW */}
+                        <div className="hidden sm:block border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs text-slate-700">
                           <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
@@ -787,7 +792,6 @@ export const StockOpnameView: React.FC = () => {
                               </th>
                               <th className="p-3">Material ID & Nama</th>
                               <th className="p-3 w-28">Lokasi</th>
-                              <th className="p-3 w-28">Stok Sistem</th>
                               <th className="p-3 w-36">Stok Fisik Aktual</th>
                               <th className="p-3 w-28">Selisih</th>
                               <th className="p-3">Penyebab Selisih / Keterangan</th>
@@ -832,11 +836,7 @@ export const StockOpnameView: React.FC = () => {
                                       {m.lokasiDefaut || '-'}
                                     </span>
                                   </td>
-                                  <td className="p-3">
-                                    <span className="font-mono font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded text-xs">
-                                      {m.currentStock} {m.satuan}
-                                    </span>
-                                  </td>
+
                                   <td className="p-3">
                                     <div className="flex items-center space-x-1">
                                       <input
@@ -907,46 +907,182 @@ export const StockOpnameView: React.FC = () => {
                         </table>
                       </div>
                     </div>
-                  )}
 
-                  {/* Submission Row inside modal */}
-                  <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white sticky bottom-0 z-10 shrink-0">
-                    <div className="flex items-center space-x-1.5 text-xs text-slate-600 font-medium">
-                      <Info className="w-4 h-4 text-indigo-500" />
-                      <span>
-                        Total:{' '}
-                        <strong className="text-indigo-600">
-                          {bulkCategoryMaterials.filter(m => bulkCheckedItems[m.id]).length} dari {bulkCategoryMaterials.length}
-                        </strong>{' '}
-                        material akan disimpan di riwayat stock opname.
-                      </span>
+                    {/* MOBILE CARD VIEW */}
+                    <div className="block sm:hidden space-y-3">
+                      <div className="flex items-center justify-between p-2 bg-slate-100 border border-slate-200 rounded-xl">
+                        <span className="text-[10px] text-slate-500 font-bold px-1.5 uppercase">Aksi Cepat Massal</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allChecked = bulkCategoryMaterials.every(m => bulkCheckedItems[m.id]);
+                            const nextChecked: Record<string, boolean> = {};
+                            bulkCategoryMaterials.forEach(m => {
+                              nextChecked[m.id] = !allChecked;
+                            });
+                            setBulkCheckedItems(nextChecked);
+                          }}
+                          className="text-xs text-indigo-700 hover:underline font-bold px-2.5 py-1 bg-white border border-indigo-100 rounded-lg shadow-2xs cursor-pointer"
+                        >
+                          {bulkCategoryMaterials.every(m => bulkCheckedItems[m.id]) ? 'Sembunyikan Semua' : 'Pilih Semua'}
+                        </button>
+                      </div>
+
+                      {bulkCategoryMaterials.map(m => {
+                        const isIncluded = !!bulkCheckedItems[m.id];
+                        const inputQty = bulkQtyInputs[m.id] ?? '';
+                        const parsedInput = parseVal(inputQty);
+                        const selisih = parsedInput - m.currentStock;
+
+                        return (
+                          <div
+                            key={m.id}
+                            className={`p-3 border rounded-xl transition-all space-y-2.5 ${
+                              isIncluded 
+                                ? 'bg-white border-slate-200 shadow-xs' 
+                                : 'bg-slate-50/80 border-slate-200/60 opacity-65'
+                            }`}
+                          >
+                            {/* Header Kartu: Material ID, Nama Barang, and Checkbox pilihan */}
+                            <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
+                              <div className="flex items-start space-x-2.5">
+                                <input
+                                  type="checkbox"
+                                  checked={isIncluded}
+                                  onChange={e => {
+                                    setBulkCheckedItems(prev => ({
+                                      ...prev,
+                                      [m.id]: e.target.checked
+                                    }));
+                                  }}
+                                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-5 h-5 cursor-pointer mt-0.5 shrink-0"
+                                />
+                                <div>
+                                  <p className="font-mono font-extrabold text-slate-900 text-xs leading-tight">{m.id}</p>
+                                  <p className="font-bold text-slate-700 text-xs mt-0.5 leading-snug">{m.namaBarang}</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Informasi Utama: Badges/Label Lokasi Gedung & Stok Sistem */}
+                            <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-md font-extrabold uppercase tracking-wider">
+                                Lokasi: {m.lokasiDefaut || '-'}
+                              </span>
+
+                            </div>
+
+                            {/* Area Input Utama: Field "Stok Fisik Aktual" */}
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Stok Fisik Aktual ({m.satuan})</label>
+                                {isIncluded && (
+                                  <div className="text-[10px] font-bold">
+                                    {selisih === 0 ? (
+                                      <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">Match (0)</span>
+                                    ) : selisih > 0 ? (
+                                      <span className="text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 font-extrabold">Selisih: +{selisih}</span>
+                                    ) : (
+                                      <span className="text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100 font-extrabold">Selisih: {selisih}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  disabled={!isIncluded}
+                                  value={inputQty}
+                                  onChange={e => {
+                                    setBulkQtyInputs(prev => ({
+                                      ...prev,
+                                      [m.id]: e.target.value
+                                    }));
+                                  }}
+                                  className="w-full h-11 bg-white border-2 border-indigo-200 rounded-xl px-3 text-center text-lg font-extrabold text-indigo-800 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 transition-all shadow-xs"
+                                  placeholder="0"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={!isIncluded}
+                                  onClick={() => {
+                                    setBulkQtyInputs(prev => ({
+                                      ...prev,
+                                      [m.id]: String(m.currentStock)
+                                    }));
+                                  }}
+                                  className="h-11 px-3 bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all disabled:opacity-45 shrink-0 cursor-pointer"
+                                  title="Set Qty Fisik sama dengan Qty Sistem"
+                                >
+                                  Sesuai
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Field Keterangan: Textarea / Input Penyebab Selisih */}
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Keterangan / Penyebab Selisih</label>
+                              <input
+                                type="text"
+                                disabled={!isIncluded}
+                                value={bulkNoteInputs[m.id] || ''}
+                                onChange={e => {
+                                  setBulkNoteInputs(prev => ({
+                                    ...prev,
+                                    [m.id]: e.target.value
+                                  }));
+                                }}
+                                placeholder="Contoh: Selisih hitung, rusak..."
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
+                  </>
+                )}
+              </div>
 
-                    <div className="flex space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsBulkModalOpen(false)}
-                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl"
-                      >
-                        Batal
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={bulkCategoryMaterials.filter(m => bulkCheckedItems[m.id]).length === 0}
-                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
-                      >
-                        Simpan Semua Opname Kategori
-                      </button>
-                    </div>
-                  </div>
+              {/* Sticky/Fixed submission footer - stays docked perfectly at the bottom */}
+              <div className="p-4 border-t border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 sticky bottom-0 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] sm:shadow-none">
+                <div className="flex items-center space-x-1.5 text-xs text-slate-600 font-semibold">
+                  <Info className="w-4 h-4 text-indigo-500 shrink-0" />
+                  <span>
+                    Daftar Opname:{' '}
+                    <strong className="text-indigo-600">
+                      {bulkCategoryMaterials.filter(m => bulkCheckedItems[m.id]).length} dari {bulkCategoryMaterials.length}
+                    </strong>{' '}
+                    item aktif.
+                  </span>
+                </div>
 
-                </form>
-              )}
+                <div className="flex space-x-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsBulkModalOpen(false)}
+                    className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer text-center"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={bulkCategoryMaterials.filter(m => bulkCheckedItems[m.id]).length === 0}
+                    className="flex-[2] sm:flex-none px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer text-center"
+                  >
+                    Simpan Semua Opname Kategori
+                  </button>
+                </div>
+              </div>
 
-            </div>
+            </form>
+          )}
+
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {/* DELETE CONFIRMATION MODAL */}
       {deleteConfirmId && (
