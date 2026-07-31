@@ -30,7 +30,13 @@ export const INITIAL_CATEGORIES: MasterSettingItem[] = [];
 
 export const INITIAL_UNITS: MasterSettingItem[] = [];
 
-export const INITIAL_ZONES: MasterSettingItem[] = [];
+export const INITIAL_ZONES: MasterSettingItem[] = [
+  { id: 'ZON-1', nama: 'Zona Raw Material', kode: 'Z-RM' },
+  { id: 'ZON-2', nama: 'Zona Finished Goods', kode: 'Z-FG' },
+  { id: 'ZON-3', nama: 'Zona Karantina & QC', kode: 'Z-QC' },
+  { id: 'ZON-4', nama: 'Zona Transit & Staging', kode: 'Z-TS' },
+  { id: 'ZON-5', nama: 'Zona Packaging & Kemasan', kode: 'Z-PK' },
+];
 
 const today = new Date().toISOString().split('T')[0];
 

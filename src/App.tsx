@@ -9,6 +9,7 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { SpreadsheetModal } from './components/SpreadsheetModal';
 import { NotificationModal } from './components/NotificationModal';
 import { LoginView } from './components/LoginView';
+import { AutoBanner } from './components/AutoBanner';
 
 // Views
 import { DashboardView } from './views/DashboardView';
@@ -146,6 +147,8 @@ function MainApp() {
 
         {/* Dynamic View Canvas */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 mb-16 lg:mb-0 max-w-7xl mx-auto w-full overflow-x-hidden">
+          {/* Automatic Banner combining Day, Date, Time & Information Text */}
+          <AutoBanner />
           {renderActiveView()}
         </main>
 

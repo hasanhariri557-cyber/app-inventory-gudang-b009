@@ -131,6 +131,7 @@ interface WmsContextType {
   addVendor: (v: Omit<Vendor, 'id'>) => void;
   deleteVendor: (id: string) => void;
   addGedung: (g: Omit<Gedung, 'id'>) => void;
+  updateGedung: (id: string, g: Partial<Gedung>) => void;
   deleteGedung: (id: string) => void;
   addCategory: (c: Omit<MasterSettingItem, 'id'>) => void;
   updateCategory: (id: string, c: Partial<MasterSettingItem>) => void;
@@ -138,6 +139,9 @@ interface WmsContextType {
   addUnit: (u: Omit<MasterSettingItem, 'id'>) => void;
   updateUnit: (id: string, u: Partial<MasterSettingItem>) => void;
   deleteUnit: (id: string) => void;
+  addZone: (z: Omit<MasterSettingItem, 'id'>) => void;
+  updateZone: (id: string, z: Partial<MasterSettingItem>) => void;
+  deleteZone: (id: string) => void;
   
   deleteIncoming: (id: string) => Promise<void>;
   deleteOutbound: (id: string) => Promise<void>;
@@ -1315,6 +1319,11 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Lokasi Gudang Disimpan', `Gedung ${g.nama} dengan kapasitas ${g.kapasitasPallet} Pallet telah ditambahkan.`, 'success', 'Layout Gudang');
   };
 
+  const updateGedung = (id: string, g: Partial<Gedung>) => {
+    setGedungList(prev => prev.map(item => item.id === id ? { ...item, ...g } : item));
+    showNotification('Master Gedung Diperbarui', `Data master gedung berhasil diperbarui.`, 'success', 'Layout Gudang');
+  };
+
   const deleteGedung = async (id: string) => {
     const targetGedung = gedungList.find(g => g.id === id);
     setGedungList(prev => prev.filter(g => g.id !== id));
@@ -1356,6 +1365,24 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUnits(prev => prev.filter(item => item.id !== id));
     await deleteFromFirestore('units', id);
     showNotification('Satuan Dihapus', `Satuan ${target?.nama || id} berhasil dihapus.`, 'info', 'Master Satuan');
+  };
+
+  const addZone = (z: Omit<MasterSettingItem, 'id'>) => {
+    const newZone: MasterSettingItem = { ...z, id: `ZON-${Date.now()}` };
+    setZones(prev => [...prev, newZone]);
+    showNotification('Zona Gudang Disimpan', `Zona ${z.nama} berhasil ditambahkan.`, 'success', 'Master Zona Gudang');
+  };
+
+  const updateZone = (id: string, z: Partial<MasterSettingItem>) => {
+    setZones(prev => prev.map(item => item.id === id ? { ...item, ...z } : item));
+    showNotification('Zona Gudang Diperbarui', `Data zona gudang berhasil diperbarui.`, 'success', 'Master Zona Gudang');
+  };
+
+  const deleteZone = async (id: string) => {
+    const target = zones.find(item => item.id === id);
+    setZones(prev => prev.filter(item => item.id !== id));
+    await deleteFromFirestore('zones', id);
+    showNotification('Zona Gudang Dihapus', `Zona ${target?.nama || id} berhasil dihapus.`, 'info', 'Master Zona Gudang');
   };
 
   const deleteIncoming = async (id: string) => {
@@ -1609,6 +1636,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addVendor,
       deleteVendor,
       addGedung,
+      updateGedung,
       deleteGedung,
       addCategory,
       updateCategory,
@@ -1616,6 +1644,9 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addUnit,
       updateUnit,
       deleteUnit,
+      addZone,
+      updateZone,
+      deleteZone,
       deleteIncoming,
       deleteOutbound,
       deleteReject,

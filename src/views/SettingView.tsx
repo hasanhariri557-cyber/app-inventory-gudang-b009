@@ -72,6 +72,7 @@ export const SettingView: React.FC = () => {
     addVendor,
     deleteVendor,
     addGedung,
+    updateGedung,
     deleteGedung,
     addCategory,
     updateCategory,
@@ -79,6 +80,9 @@ export const SettingView: React.FC = () => {
     addUnit,
     updateUnit,
     deleteUnit,
+    addZone,
+    updateZone,
+    deleteZone,
     updateRolePermission,
     updateAdminAuthority,
     updateMenuConfig,
@@ -458,7 +462,7 @@ export const SettingView: React.FC = () => {
   const [isAddGedungOpen, setIsAddGedungOpen] = useState(false);
   const [deletingBuilding, setDeletingBuilding] = useState<Gedung | null>(null);
 
-  // Master Category & Unit State
+  // Master Category, Unit & Zone State
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<MasterSettingItem | null>(null);
   const [deletingCategory, setDeletingCategory] = useState<MasterSettingItem | null>(null);
@@ -469,6 +473,19 @@ export const SettingView: React.FC = () => {
   const [editingUnit, setEditingUnit] = useState<MasterSettingItem | null>(null);
   const [deletingUnit, setDeletingUnit] = useState<MasterSettingItem | null>(null);
   const [unitName, setUnitName] = useState('');
+
+  const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
+  const [editingZone, setEditingZone] = useState<MasterSettingItem | null>(null);
+  const [deletingZone, setDeletingZone] = useState<MasterSettingItem | null>(null);
+  const [zoneName, setZoneName] = useState('');
+  const [zoneCode, setZoneCode] = useState('');
+
+  // Inline Quick Add Zone in Gedung Form
+  const [isAddingNewZone, setIsAddingNewZone] = useState(false);
+  const [newZoneInput, setNewZoneInput] = useState('');
+
+  // Editing Gedung State
+  const [editingBuilding, setEditingBuilding] = useState<Gedung | null>(null);
 
   const handleSaveCategory = (e: React.FormEvent) => {
     e.preventDefault();
@@ -495,6 +512,20 @@ export const SettingView: React.FC = () => {
     setIsUnitModalOpen(false);
     setEditingUnit(null);
     setUnitName('');
+  };
+
+  const handleSaveZone = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!zoneName) return;
+    if (editingZone) {
+      updateZone(editingZone.id, { nama: zoneName, kode: zoneCode || undefined });
+    } else {
+      addZone({ nama: zoneName, kode: zoneCode || zoneName.substring(0, 4).toUpperCase() });
+    }
+    setIsZoneModalOpen(false);
+    setEditingZone(null);
+    setZoneName('');
+    setZoneCode('');
   };
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [adminPinInput, setAdminPinInput] = useState('');
@@ -553,15 +584,29 @@ export const SettingView: React.FC = () => {
   const handleCreateGedung = (e: React.FormEvent) => {
     e.preventDefault();
     if (!namaGedung) return;
-    addGedung({
-      nama: namaGedung,
-      zona: zonaGedung,
-      kapasitasPallet,
-      palletTerisi: 0,
-      deskripsi: deskripsiGedung
-    });
+    const selectedZona = zonaGedung || (zones[0]?.nama || 'Zona Raw Material');
+    if (editingBuilding) {
+      updateGedung(editingBuilding.id, {
+        nama: namaGedung,
+        zona: selectedZona,
+        kapasitasPallet,
+        deskripsi: deskripsiGedung
+      });
+    } else {
+      addGedung({
+        nama: namaGedung,
+        zona: selectedZona,
+        kapasitasPallet,
+        palletTerisi: 0,
+        deskripsi: deskripsiGedung
+      });
+    }
     setIsAddGedungOpen(false);
+    setEditingBuilding(null);
     setNamaGedung('');
+    setDeskripsiGedung('');
+    setIsAddingNewZone(false);
+    setNewZoneInput('');
   };
 
   const handleResetData = () => {
@@ -900,7 +945,7 @@ export const SettingView: React.FC = () => {
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>8. Master Kategori & Satuan</span>
+          <span>8. Master Kategori, Satuan & Zona</span>
         </button>
 
         <button
@@ -1966,8 +2011,17 @@ export const SettingView: React.FC = () => {
             </div>
             <button
               disabled={currentUser.role !== 'Admin'}
-              onClick={() => setIsAddGedungOpen(true)}
-              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center space-x-1 shadow-xs transition-all disabled:opacity-50"
+              onClick={() => {
+                setEditingBuilding(null);
+                setNamaGedung('');
+                setZonaGedung(zones[0]?.nama || 'Zona Raw Material');
+                setKapasitasPallet(100);
+                setDeskripsiGedung('');
+                setIsAddingNewZone(false);
+                setNewZoneInput('');
+                setIsAddGedungOpen(true);
+              }}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center space-x-1 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah Gedung Baru</span>
@@ -1989,15 +2043,35 @@ export const SettingView: React.FC = () => {
                     <span className="text-slate-500">Pallet: </span>
                     <span className="text-emerald-700 font-mono font-bold">{g.palletTerisi} / {g.kapasitasPallet}</span>
                   </div>
-                  <button
-                    disabled={currentUser.role !== 'Admin'}
-                    onClick={() => setDeletingBuilding(g)}
-                    title="Hapus Gedung"
-                    className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center space-x-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span className="text-[10px] font-bold">Hapus</span>
-                  </button>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      disabled={currentUser.role !== 'Admin'}
+                      onClick={() => {
+                        setEditingBuilding(g);
+                        setNamaGedung(g.nama);
+                        setZonaGedung(g.zona);
+                        setKapasitasPallet(g.kapasitasPallet);
+                        setDeskripsiGedung(g.deskripsi || '');
+                        setIsAddingNewZone(false);
+                        setNewZoneInput('');
+                        setIsAddGedungOpen(true);
+                      }}
+                      title="Edit Gedung"
+                      className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center space-x-1"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-bold">Edit</span>
+                    </button>
+                    <button
+                      disabled={currentUser.role !== 'Admin'}
+                      onClick={() => setDeletingBuilding(g)}
+                      title="Hapus Gedung"
+                      className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center space-x-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-bold">Hapus</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -2005,9 +2079,9 @@ export const SettingView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 7: MASTER KATEGORI & SATUAN */}
+      {/* TAB 7: MASTER KATEGORI, SATUAN & ZONA GUDANG */}
       {activeTab === 'master' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Kategori Material */}
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
             <div className="flex items-center justify-between">
@@ -2106,6 +2180,62 @@ export const SettingView: React.FC = () => {
                       onClick={() => setDeletingUnit(u)}
                       className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                       title="Hapus Satuan"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Zona Gudang */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Zona Gudang</h3>
+                <p className="text-[11px] text-slate-500">{zones.length} zona terdaftar</p>
+              </div>
+              <button
+                disabled={adminAuthorities.editMasterData && currentUser.role !== 'Admin'}
+                onClick={() => {
+                  setEditingZone(null);
+                  setZoneName('');
+                  setZoneCode('');
+                  setIsZoneModalOpen(true);
+                }}
+                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center space-x-1"
+                title={adminAuthorities.editMasterData && currentUser.role !== 'Admin' ? 'Otoritas khusus Admin' : 'Tambah Zona'}
+              >
+                <span>+ Tambah</span>
+              </button>
+            </div>
+            <div className="space-y-2">
+              {zones.map(z => (
+                <div key={z.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-semibold text-purple-700">
+                  <div>
+                    <span className="text-slate-800 font-bold block">{z.nama}</span>
+                    <span className="text-purple-600 font-mono text-[10px] font-semibold">{z.kode || '-'}</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      disabled={adminAuthorities.editMasterData && currentUser.role !== 'Admin'}
+                      onClick={() => {
+                        setEditingZone(z);
+                        setZoneName(z.nama);
+                        setZoneCode(z.kode || '');
+                        setIsZoneModalOpen(true);
+                      }}
+                      className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      title="Edit Zona"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      disabled={adminAuthorities.deleteMasterData && currentUser.role !== 'Admin'}
+                      onClick={() => setDeletingZone(z)}
+                      className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      title="Hapus Zona"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -2661,13 +2791,13 @@ export const SettingView: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL ADD GEDUNG */}
+      {/* MODAL ADD / EDIT GEDUNG */}
       {isAddGedungOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden text-slate-800">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-              <h3 className="font-bold text-slate-900 text-sm">Tambah Master Gedung Baru</h3>
-              <button onClick={() => setIsAddGedungOpen(false)} className="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+              <h3 className="font-bold text-slate-900 text-sm">{editingBuilding ? 'Edit Master Gedung' : 'Tambah Master Gedung Baru'}</h3>
+              <button onClick={() => { setIsAddGedungOpen(false); setEditingBuilding(null); }} className="text-slate-400 hover:text-slate-700 font-bold">✕</button>
             </div>
             <form onSubmit={handleCreateGedung} className="p-6 space-y-3">
               <div>
@@ -2682,16 +2812,55 @@ export const SettingView: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-700 font-semibold mb-1">Zona Gudang</label>
-                <select
-                  value={zonaGedung}
-                  onChange={e => setZonaGedung(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
-                >
-                  {zones.map(z => (
-                    <option key={z.id} value={z.nama}>{z.nama}</option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs text-slate-700 font-semibold">Zona Gudang *</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingNewZone(prev => !prev)}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-all flex items-center space-x-0.5 cursor-pointer"
+                  >
+                    <span>{isAddingNewZone ? '← Pilih Dari List' : '+ Tambah Zona Baru'}</span>
+                  </button>
+                </div>
+
+                {isAddingNewZone ? (
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      placeholder="Ketik nama zona baru..."
+                      value={newZoneInput}
+                      onChange={e => setNewZoneInput(e.target.value)}
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newZoneInput.trim()) return;
+                        const trimmed = newZoneInput.trim();
+                        addZone({ nama: trimmed, kode: trimmed.substring(0, 4).toUpperCase() });
+                        setZonaGedung(trimmed);
+                        setNewZoneInput('');
+                        setIsAddingNewZone(false);
+                      }}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all shrink-0 cursor-pointer"
+                    >
+                      + Simpan
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={zonaGedung}
+                    onChange={e => setZonaGedung(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                  >
+                    {zones.map(z => (
+                      <option key={z.id} value={z.nama}>{z.nama}</option>
+                    ))}
+                    {zonaGedung && !zones.some(z => z.nama === zonaGedung) && (
+                      <option value={zonaGedung}>{zonaGedung}</option>
+                    )}
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-slate-700 font-semibold mb-1">Kapasitas Pallet</label>
@@ -2715,7 +2884,7 @@ export const SettingView: React.FC = () => {
                 />
               </div>
               <div className="pt-3 border-t border-slate-200 flex justify-end space-x-2">
-                <button type="button" onClick={() => setIsAddGedungOpen(false)} className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-xl font-semibold">Batal</button>
+                <button type="button" onClick={() => { setIsAddGedungOpen(false); setEditingBuilding(null); }} className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-xl font-semibold">Batal</button>
                 <button type="submit" className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs">Simpan Gedung</button>
               </div>
             </form>
@@ -2911,6 +3080,87 @@ export const SettingView: React.FC = () => {
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Ya, Hapus Satuan</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ADD / EDIT ZONE */}
+      {isZoneModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden text-slate-800">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="font-bold text-slate-900 text-sm">{editingZone ? 'Edit Zona Gudang' : 'Tambah Zona Gudang Baru'}</h3>
+              <button onClick={() => setIsZoneModalOpen(false)} className="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+            </div>
+            <form onSubmit={handleSaveZone} className="p-6 space-y-3">
+              <div>
+                <label className="block text-xs text-slate-700 font-semibold mb-1">Nama Zona *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Zona Raw Material"
+                  value={zoneName}
+                  onChange={e => setZoneName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-700 font-semibold mb-1">Kode / Singkatan Zona</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Z-RM"
+                  value={zoneCode}
+                  onChange={e => setZoneCode(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+              <div className="pt-3 border-t border-slate-200 flex justify-end space-x-2">
+                <button type="button" onClick={() => setIsZoneModalOpen(false)} className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-xl font-semibold">Batal</button>
+                <button type="submit" className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs">Simpan Zona</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRM DELETE ZONE */}
+      {deletingZone && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden text-slate-800 space-y-4 p-6">
+            <div className="flex items-center space-x-3 text-rose-600">
+              <div className="p-3 bg-rose-100 rounded-xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Konfirmasi Hapus Zona</h3>
+                <p className="text-xs text-slate-500">Tindakan ini tidak dapat dibatalkan</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Apakah Anda yakin ingin menghapus zona gudang <strong className="text-slate-900 font-bold">{deletingZone.nama}</strong>?
+            </p>
+
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeletingZone(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteZone(deletingZone.id);
+                  setDeletingZone(null);
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all flex items-center space-x-1 shadow-xs cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Hapus Zona</span>
               </button>
             </div>
           </div>
