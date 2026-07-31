@@ -152,8 +152,8 @@ export const StockOpnameView: React.FC = () => {
     const initialChecked: Record<string, boolean> = {};
 
     matsInCat.forEach(m => {
-      // Pre-fill physical qty input with system stock to make input faster
-      initialQtys[m.id] = String(m.currentStock);
+      // Pre-fill physical qty input with default '0'
+      initialQtys[m.id] = '0';
       initialNotes[m.id] = '';
       initialChecked[m.id] = true; // Default checked
     });
@@ -664,8 +664,8 @@ export const StockOpnameView: React.FC = () => {
 
       {/* BULK CATEGORY STOCK OPNAME MODAL (Jobdesk PIC Split) */}
       {isBulkModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden text-slate-800 flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-950/50 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-none sm:rounded-2xl w-full max-w-4xl h-full sm:h-auto max-h-screen sm:max-h-[90vh] shadow-2xl overflow-hidden text-slate-800 flex flex-col">
             
             {/* Modal Header */}
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
@@ -786,8 +786,9 @@ export const StockOpnameView: React.FC = () => {
                                 </button>
                               </th>
                               <th className="p-3">Material ID & Nama</th>
+                              <th className="p-3 w-28">Lokasi</th>
                               <th className="p-3 w-28">Stok Sistem</th>
-                              <th className="p-3 w-32">Stok Fisik Aktual</th>
+                              <th className="p-3 w-36">Stok Fisik Aktual</th>
                               <th className="p-3 w-28">Selisih</th>
                               <th className="p-3">Penyebab Selisih / Keterangan</th>
                               <th className="p-3 w-24 text-center">Aksi Cepat</th>
@@ -827,6 +828,11 @@ export const StockOpnameView: React.FC = () => {
                                     </div>
                                   </td>
                                   <td className="p-3">
+                                    <span className="px-2.5 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-[11px] font-bold uppercase tracking-wider">
+                                      {m.lokasiDefaut || '-'}
+                                    </span>
+                                  </td>
+                                  <td className="p-3">
                                     <span className="font-mono font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded text-xs">
                                       {m.currentStock} {m.satuan}
                                     </span>
@@ -844,7 +850,8 @@ export const StockOpnameView: React.FC = () => {
                                             [m.id]: e.target.value
                                           }));
                                         }}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-indigo-700 font-bold focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                                        className="w-full bg-white border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm sm:text-base text-indigo-800 font-extrabold focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 text-center transition-all shadow-xs"
+                                        placeholder="0"
                                       />
                                     </div>
                                   </td>
