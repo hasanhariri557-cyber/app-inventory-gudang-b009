@@ -47,7 +47,7 @@ export const WarehouseLayoutView: React.FC = () => {
             <span>Warehouse Layout Gudang Pancawati</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Visualisasi Zona Penyimpanan Barang & status okupansi pallet real-time.
+            Visualisasi Zona Penyimpanan Barang & Status Occupancy Pallet Real-Time.
           </p>
         </div>
 
@@ -70,7 +70,7 @@ export const WarehouseLayoutView: React.FC = () => {
       {/* VISUAL DENAH GRID (10 GEDUNG REQUIREMENT) */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-          Peta Denah Blok & Rak Gudang (Klik Gedung Untuk Detail)
+          Peta Denah Gudang (Klik Gedung Untuk Detail)
         </h3>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">

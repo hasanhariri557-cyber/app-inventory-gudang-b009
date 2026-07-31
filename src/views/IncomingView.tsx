@@ -148,7 +148,8 @@ export const IncomingView: React.FC = () => {
       qtyDiterima: 500,
       lokasiSimpan: 'Gedung B1',
       status: 'Good Receiving',
-      alasanReject: ''
+      alasanReject: '',
+      jumlahPallet: 1
     }
   ]);
 
@@ -164,7 +165,8 @@ export const IncomingView: React.FC = () => {
         qtyDiterima: 100,
         lokasiSimpan: 'Gedung A1',
         status: 'Good Receiving',
-        alasanReject: ''
+        alasanReject: '',
+        jumlahPallet: 1
       }
     ]);
   };
@@ -244,6 +246,7 @@ export const IncomingView: React.FC = () => {
       qtySuratJalan: parseVal(d.qtySuratJalan),
       qtyReject: parseVal(d.qtyReject),
       qtyDiterima: parseVal(d.qtyDiterima),
+      jumlahPallet: parseVal(d.jumlahPallet),
     }));
 
     addIncoming({
@@ -284,7 +287,7 @@ export const IncomingView: React.FC = () => {
             <span>Incoming Barang (Receiving)</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Penerimaan barang masuk dari vendor, proses good receive, dan alokasi barang.
+            Penerimaan Inbound Dari Vendor, Proses Good Receive Sampai Alokasi Barang Ke Gedung Pnyimpanan.
           </p>
         </div>
 
@@ -293,7 +296,7 @@ export const IncomingView: React.FC = () => {
           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center space-x-1.5 transition-all"
         >
           <Plus className="w-4 h-4" />
-          <span>Input Receiving Baru</span>
+          <span>Input Barang Masuk</span>
         </button>
       </div>
 
@@ -403,13 +406,14 @@ export const IncomingView: React.FC = () => {
                             <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 shadow-xs">
                               <h4 className="text-xs font-bold text-emerald-700 flex items-center space-x-1">
                                 <FileText className="w-3.5 h-3.5" />
-                                <span>Rincian Detail Barang Receiving</span>
+                                <span>Rincian Detail Barang</span>
                               </h4>
                               <table className="w-full text-left text-xs text-slate-700">
                                 <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600 font-semibold uppercase text-[10px]">
                                   <tr>
                                     <th className="p-2">Material ID</th>
                                     <th className="p-2">Nama Barang</th>
+                                    <th className="p-2">Qty Pallet</th>
                                     <th className="p-2">Qty SJ</th>
                                     <th className="p-2">Qty Reject</th>
                                     <th className="p-2">Qty Diterima</th>
@@ -422,6 +426,7 @@ export const IncomingView: React.FC = () => {
                                     <tr key={idx}>
                                       <td className="p-2 font-mono text-indigo-600 font-bold">{d.materialId}</td>
                                       <td className="p-2 font-medium text-slate-900">{d.namaBarang}</td>
+                                      <td className="p-2 font-bold text-amber-700">{d.jumlahPallet ?? 1} Pallet</td>
                                       <td className="p-2 text-slate-500">{d.qtySuratJalan}</td>
                                       <td className="p-2 font-bold text-rose-600">{d.qtyReject}</td>
                                       <td className="p-2 font-bold text-emerald-600">{d.qtyDiterima}</td>
@@ -557,7 +562,7 @@ export const IncomingView: React.FC = () => {
                 <div className="space-y-3">
                   {details.map((item, idx) => (
                     <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
                         <div className="sm:col-span-2">
                           <label className="block text-[11px] font-medium text-slate-600 mb-1">Pilih Material</label>
                           <MaterialSearchSelect
@@ -586,6 +591,21 @@ export const IncomingView: React.FC = () => {
                             value={item.qtyReject}
                             onChange={e => handleQtyChange(idx, 'qtyReject', e.target.value)}
                             className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-rose-600 font-bold focus:outline-none focus:border-rose-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 mb-1">Jumlah Pallet</label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={item.jumlahPallet ?? 1}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setDetails(prev => prev.map((d, i) => i === idx ? { ...d, jumlahPallet: val as any } : d));
+                            }}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-semibold"
+                            placeholder="1"
                           />
                         </div>
                       </div>
@@ -657,7 +677,7 @@ export const IncomingView: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs"
                 >
-                  Proses & Simpan Receiving
+                  Proses & Simpan Inbound
                 </button>
               </div>
 

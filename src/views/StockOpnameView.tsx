@@ -13,9 +13,11 @@ import {
   ChevronRight,
   Info,
   CheckSquare,
-  RotateCcw
+  RotateCcw,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
+import { exportToExcel } from '../utils/exportUtils';
 
 export const StockOpnameView: React.FC = () => {
   const {
@@ -245,6 +247,32 @@ export const StockOpnameView: React.FC = () => {
     }
   });
 
+  const handleExportExcel = () => {
+    if (filteredOpnames.length === 0) {
+      showNotification('Ekspor Gagal', 'Tidak ada data stock opname untuk diekspor dengan filter aktif.', 'warning', 'Stock Opname');
+      return;
+    }
+    const rows = filteredOpnames.map(s => {
+      const mat = materials.find(m => m.id === s.materialId);
+      return {
+        'Tanggal': s.tanggal,
+        'Kategori': mat?.kategori || 'Lain-lain',
+        'Material ID': s.materialId,
+        'Nama Barang': s.namaBarang,
+        'Lokasi Gudang': mat?.lokasiDefaut || '-',
+        'Qty Sistem (saat Opname)': s.qtySistem,
+        'Qty Fisik (saat Opname)': s.qtyFisik,
+        'Selisih': s.selisih,
+        'Satuan': mat?.satuan || '',
+        'Penyebab Selisih': s.penyebab || '-',
+        'PIC Pelapor': s.pic,
+        'Status': s.status
+      };
+    });
+    exportToExcel(rows, `Laporan_Stock_Opname_Harian_${activeCategoryFilter.replace(/[^a-zA-Z0-9]/g, '_')}`, 'Stock_Opname');
+    showNotification('Ekspor Berhasil', 'Data stock opname berhasil diekspor ke file Excel.', 'success', 'Stock Opname');
+  };
+
   return (
     <div className="space-y-6">
       
@@ -258,18 +286,26 @@ export const StockOpnameView: React.FC = () => {
             <span>Stock Opname Harian</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Pecah perhitungan fisik harian per kategori untuk memudahkan PIC Stoker menginput hasil opname sesuai jobdesk/rak areanya.
+            Report Perhitungan Fisik Harian Per Kategori Untuk Memudahkan PIC Stoker Menginput Hasil Opname Sesuai Jobdesk Areanya.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleExportExcel}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Ekspor Excel</span>
+          </button>
+
           {/* Main call-to-action is bulk input per category */}
           <button
             onClick={handleOpenBulkModal}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
           >
             <Layers className="w-4 h-4" />
-            <span>Mulai Hitung per Kategori (PIC Job)</span>
+            <span>Mulai Hitung per Kategori</span>
           </button>
 
           <button
@@ -311,7 +347,7 @@ export const StockOpnameView: React.FC = () => {
             <Calendar className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="text-xs font-bold text-amber-950">Tanggal Berjalan Opname</h4>
+            <h4 className="text-xs font-bold text-amber-950">Tanggal Update Opname</h4>
             <p className="text-sm font-semibold text-amber-800 mt-0.5">{new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
             <p className="text-[10px] text-amber-600">Direkomendasikan melakukan cut-off & opname sebelum shift berakhir.</p>
           </div>
@@ -383,18 +419,20 @@ export const StockOpnameView: React.FC = () => {
                 <th className="p-3.5">Kategori</th>
                 <th className="p-3.5">Material ID</th>
                 <th className="p-3.5">Nama Barang</th>
+                <th className="p-3.5">Lokasi</th>
                 <th className="p-3.5">Qty Sistem</th>
                 <th className="p-3.5">Qty Fisik</th>
                 <th className="p-3.5">Selisih</th>
                 <th className="p-3.5">Penyebab Selisih</th>
                 <th className="p-3.5">PIC Pelapor</th>
+                <th className="p-3.5 text-center">Status</th>
                 <th className="p-3.5 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredOpnames.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-12 text-center text-slate-400 italic">
+                  <td colSpan={12} className="p-12 text-center text-slate-400 italic">
                     Belum ada data perhitungan stock opname untuk filter yang dipilih.
                   </td>
                 </tr>
@@ -413,7 +451,12 @@ export const StockOpnameView: React.FC = () => {
                       </td>
                       <td className="p-3.5 font-mono font-bold text-indigo-600">{s.materialId}</td>
                       <td className="p-3.5 font-semibold text-slate-900">{s.namaBarang}</td>
-                      <td className="p-3.5 font-mono text-slate-600">{s.qtySistem} {mat?.satuan}</td>
+                      <td className="p-3.5 text-slate-700 font-medium">
+                        <span className="px-2 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded text-[11px] font-semibold whitespace-nowrap">
+                          {mat?.lokasiDefaut || '-'}
+                        </span>
+                      </td>
+                      <td className="p-3.5 font-mono text-slate-600 whitespace-nowrap">{s.qtySistem} {mat?.satuan}</td>
                       <td className="p-3.5 font-mono font-bold text-indigo-700">{s.qtyFisik} {mat?.satuan}</td>
                       <td className="p-3.5 font-bold">
                         {s.selisih === 0 ? (
@@ -429,7 +472,29 @@ export const StockOpnameView: React.FC = () => {
                       </td>
                       <td className="p-3.5 text-slate-700">{s.pic}</td>
                       <td className="p-3.5 text-center">
+                        {s.status === 'Selesai' ? (
+                          <span className="inline-flex px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">
+                            Selesai
+                          </span>
+                        ) : (
+                          <span className="inline-flex px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-[10px] font-bold">
+                            Pending
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3.5 text-center">
                         <div className="flex items-center justify-center space-x-2">
+                          {s.status === 'Belum Selesai' && (
+                            <button
+                              onClick={() => approveStockOpnameAdjustment(s.id)}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold rounded-lg flex items-center space-x-1 cursor-pointer transition-colors shadow-xs"
+                              title="Terapkan penyesuaian fisik ke sistem stok gudang"
+                            >
+                              <Check className="w-3 h-3" />
+                              <span>Terapkan Stok</span>
+                            </button>
+                          )}
+                          
                           <button
                             onClick={() => handleRecount(s.materialId, s.qtyFisik, s.penyebab)}
                             className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 text-[10px] font-semibold rounded-lg flex items-center space-x-1 cursor-pointer transition-colors"
@@ -464,7 +529,7 @@ export const StockOpnameView: React.FC = () => {
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <h3 className="font-bold text-slate-900 text-base flex items-center space-x-2">
                 <ClipboardCheck className="w-5 h-5 text-indigo-600" />
-                <span>Input Perhitungan Single Material</span>
+                <span>Input Perhitungan Per Material</span>
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-700 font-bold">✕</button>
             </div>
@@ -632,8 +697,8 @@ export const StockOpnameView: React.FC = () => {
               {!selectedBulkCategory ? (
                 <div className="space-y-4">
                   <div className="text-center py-4">
-                    <h4 className="text-sm font-bold text-slate-800">Silakan Pilih Kategori Pekerjaan Opname Anda:</h4>
-                    <p className="text-xs text-slate-500 mt-1">PIC Stoker menghitung material yang terkelompok dalam satu kategori agar tidak bias/salah rak.</p>
+                    <h4 className="text-sm font-bold text-slate-800">Silakan Pilih Kategori Opname:</h4>
+                    <p className="text-xs text-slate-500 mt-1">PIC Stoker Menghitung Material Dalam Satu Kategori Barang.</p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">

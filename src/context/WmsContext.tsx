@@ -886,8 +886,34 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateMaterial = (id: string, m: Partial<Material>) => {
-    setMaterials(prev => prev.map(item => item.id === id ? { ...item, ...m } : item));
-    showNotification('Data Material Berhasil Perbarui', `Perubahan data material ${id} berhasil disimpan.`, 'success', 'Master Data Barang');
+    setMaterials(prev => {
+      return prev.map(item => {
+        if (item.id === id) {
+          const oldStock = item.currentStock;
+          const newStock = m.currentStock !== undefined ? m.currentStock : oldStock;
+          
+          if (newStock !== oldStock) {
+            const diff = newStock - oldStock;
+            const newEntry: KartuStockEntry = {
+              id: `KS-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+              tanggal: today,
+              materialId: id,
+              jenisTransaksi: 'Stock Opname Adjustment',
+              refNo: 'ADJ-MANUAL',
+              masuk: diff > 0 ? diff : 0,
+              keluar: diff < 0 ? Math.abs(diff) : 0,
+              saldo: newStock,
+              keterangan: 'Penyesuaian Manual Master Data',
+              lokasi: m.lokasiDefaut || item.lokasiDefaut || 'Gedung A1'
+            };
+            setKartuStocks(prevKartu => [newEntry, ...prevKartu]);
+          }
+          return { ...item, ...m };
+        }
+        return item;
+      });
+    });
+    showNotification('Data Material Berhasil Diperbarui', `Perubahan data material ${id} berhasil disimpan.`, 'success', 'Master Data Barang');
   };
 
   const deleteMaterial = async (id: string) => {
@@ -1181,40 +1207,14 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveStockOpnameAdjustment = (id: string) => {
-    if (currentUser.role !== 'Admin') {
+    if (adminAuthorities.approveStockOpnameAdjustment && currentUser.role !== 'Admin') {
       showNotification('Akses Ditolak', 'Hanya role Admin yang memiliki otoritas untuk menyetujui penyesuaian stok opname.', 'error', 'Stock Opname');
       return;
     }
 
     setStockOpnames(prev => prev.map(so => so.id === id ? { ...so, status: 'Selesai' as const } : so));
 
-    const targetSO = stockOpnames.find(so => so.id === id);
-    if (targetSO) {
-      const newKartuEntries: KartuStockEntry[] = [];
-      const mat = materials.find(m => m.id === targetSO.materialId);
-
-      if (mat) {
-        newKartuEntries.push({
-          id: `KS-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-          tanggal: today,
-          materialId: mat.id,
-          jenisTransaksi: 'Stock Opname Adjustment',
-          refNo: targetSO.id,
-          masuk: targetSO.selisih > 0 ? targetSO.selisih : 0,
-          keluar: targetSO.selisih < 0 ? Math.abs(targetSO.selisih) : 0,
-          saldo: targetSO.qtyFisik,
-          keterangan: `Penyesuaian Stock Opname (${targetSO.penyebab})`
-        });
-      }
-
-      setMaterials(prev => prev.map(m => m.id === targetSO.materialId ? { ...m, currentStock: targetSO.qtyFisik } : m));
-
-      if (newKartuEntries.length > 0) {
-        setKartuStocks(prev => [...newKartuEntries, ...prev]);
-      }
-    }
-
-    showNotification('Persetujuan Adjustment Disetujui', `Persetujuan penyesuaian stok #${id} berhasil & saldo fisik diperbarui.`, 'success', 'Stock Opname');
+    showNotification('Stock Opname Selesai', `Status Stock Opname #${id} berhasil diubah menjadi Selesai tanpa penyesuaian stok sistem otomatis.`, 'success', 'Stock Opname');
   };
 
   const addMutasi = (m: Omit<MutasiBarang, 'id' | 'tanggal'>) => {
@@ -1458,24 +1458,6 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteStockOpname = async (id: string) => {
     const so = stockOpnames.find(s => s.id === id);
     if (!so) return;
-
-    if (so.status === 'Selesai') {
-      setMaterials(prev => prev.map(mat => {
-        if (mat.id === so.materialId) {
-          return {
-            ...mat,
-            currentStock: so.qtySistem
-          };
-        }
-        return mat;
-      }));
-
-      const relatedKartu = kartuStocks.filter(ks => ks.refNo === so.id);
-      for (const ks of relatedKartu) {
-        await deleteFromFirestore('kartuStocks', ks.id);
-      }
-      setKartuStocks(prev => prev.filter(ks => ks.refNo !== so.id));
-    }
 
     setStockOpnames(prev => prev.filter(s => s.id !== id));
     await deleteFromFirestore('stockOpnames', id);

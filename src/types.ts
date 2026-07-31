@@ -31,6 +31,7 @@ export interface IncomingDetail {
   lokasiSimpan: string; // Temporary or Gedung Target
   status: 'Good Receiving' | 'Tolak' | 'Rejected';
   alasanReject?: string;
+  jumlahPallet?: number;
 }
 
 export interface IncomingHeader {
@@ -78,6 +79,7 @@ export interface OutboundDetail {
   picChecker: string;
   keterangan: string;
   gedungAsal?: string;
+  jumlahPallet?: number;
 }
 
 export interface OutboundHeader {

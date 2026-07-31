@@ -105,7 +105,7 @@ export const OutboundView: React.FC = () => {
 
   const today = getLocalDateString();
   const [filterDate, setFilterDate] = useState(today);
-  const [nomorDOSJ, setNomorDOSJ] = useState('SJB009-2026-001');
+  const [nomorDOSJ, setNomorDOSJ] = useState('SJ-B009-2026-001');
   const [customer, setCustomer] = useState('');
   const [tanggal, setTanggal] = useState(today);
   const [ekspedisi, setEkspedisi] = useState('');
@@ -125,7 +125,8 @@ export const OutboundView: React.FC = () => {
         satuan: mat.satuan,
         picChecker: currentUser.nama,
         keterangan: '',
-        gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1'
+        gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1',
+        jumlahPallet: 1
       }
     ];
   });
@@ -145,7 +146,8 @@ export const OutboundView: React.FC = () => {
         satuan: mat.satuan,
         picChecker: currentUser.nama,
         keterangan: '',
-        gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1'
+        gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1',
+        jumlahPallet: 1
       }
     ]);
   };
@@ -191,7 +193,8 @@ export const OutboundView: React.FC = () => {
     const parsedDetails = details.map((d, i) => ({
       ...d,
       id: `OUTD-${Date.now()}-${i}`,
-      qty: parseVal(d.qty)
+      qty: parseVal(d.qty),
+      jumlahPallet: parseVal(d.jumlahPallet)
     }));
 
     // Validate stock levels including potential duplicates
@@ -285,7 +288,7 @@ export const OutboundView: React.FC = () => {
             <span>Outbound Delivery (Pengiriman)</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Pengeluaran barang dari gudang pancawati ke customer,Sicom dan PT MIM dengan regulasi pengecekan barang,membuat surat jalan, reservasi sistem, input data outbound.
+            Pengeluaran Barang Dari Gudang Pancawati Ke Customer Seperti Sicom Dan PT MIM Dengan Regulasi Pengecekan Barang,Membuat Surat Jalan, Reservasi Sistem Dan Rekap Data Outbound.
           </p>
         </div>
 
@@ -429,6 +432,7 @@ export const OutboundView: React.FC = () => {
                                   <tr>
                                     <th className="p-2">Material ID</th>
                                     <th className="p-2">Nama Barang</th>
+                                    <th className="p-2">Qty Pallet</th>
                                     <th className="p-2">Gedung Asal</th>
                                     <th className="p-2">Qty</th>
                                     <th className="p-2">Satuan</th>
@@ -441,6 +445,7 @@ export const OutboundView: React.FC = () => {
                                     <tr key={idx}>
                                       <td className="p-2 font-mono text-indigo-600 font-bold">{d.materialId}</td>
                                       <td className="p-2 font-semibold text-slate-900">{d.namaBarang}</td>
+                                      <td className="p-2 font-bold text-amber-700">{d.jumlahPallet ?? 1} Pallet</td>
                                       <td className="p-2 font-medium text-slate-600">{d.gedungAsal || '-'}</td>
                                       <td className="p-2 font-bold text-indigo-600">{d.qty}</td>
                                       <td className="p-2 text-slate-500">{d.satuan}</td>
@@ -557,12 +562,10 @@ export const OutboundView: React.FC = () => {
                     <Plus className="w-3.5 h-3.5" />
                     <span>Tambah Baris</span>
                   </button>
-                </div>
-
-                <div className="space-y-3">
+                </div>                 <div className="space-y-3">
                   {details.map((item, idx) => (
                     <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
-                      <div className="sm:col-span-4">
+                      <div className="sm:col-span-3">
                         <label className="block text-[11px] font-medium text-slate-600 mb-1">Pilih Material (Ketik / Cari)</label>
                         <MaterialSearchSelect
                           value={item.materialId}
@@ -587,6 +590,21 @@ export const OutboundView: React.FC = () => {
                       </div>
 
                       <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-medium text-slate-600 mb-1">Jumlah Pallet</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={item.jumlahPallet ?? 1}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setDetails(prev => prev.map((d, i) => i === idx ? { ...d, jumlahPallet: val as any } : d));
+                          }}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+                          placeholder="1"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
                         <label className="block text-[11px] font-medium text-slate-600 mb-1">Gedung Asal</label>
                         <select
                           value={item.gedungAsal || ''}
@@ -607,7 +625,7 @@ export const OutboundView: React.FC = () => {
                         </select>
                       </div>
 
-                      <div className="sm:col-span-3">
+                      <div className="sm:col-span-2">
                         <label className="block text-[11px] font-medium text-slate-600 mb-1">Keterangan</label>
                         <input
                           type="text"

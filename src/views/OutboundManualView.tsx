@@ -22,7 +22,7 @@ export const OutboundManualView: React.FC = () => {
 
   const today = getLocalDateString();
   const [filterDate, setFilterDate] = useState(today);
-  const [nomorDOSJ, setNomorDOSJ] = useState('SJ-MANUAL-2026-001');
+  const [nomorDOSJ, setNomorDOSJ] = useState('SJ-MIMB009-2026-001');
   const [customer, setCustomer] = useState('');
   const [tanggal, setTanggal] = useState(today);
   const [ekspedisi, setEkspedisi] = useState('');
@@ -194,7 +194,7 @@ export const OutboundManualView: React.FC = () => {
             <span>Surat Jalan Manual</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Penerbitan surat jalan manual dengan ketik manual bebas tanpa mempengaruhi atau memotong saldo stok fisik gudang sistem, serta bisa langsung dicetak PDF.
+            Penerbitan Surat Jalan Manual Untuk Proses Muat Pallet,Muat Kempu Kosong Dan Barang Titipan.
           </p>
         </div>
 

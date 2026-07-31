@@ -254,7 +254,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
             <span>Report transaksi Gudang Pancawati</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Ekspor Laporan Gudang Pancawati (Incoming, Outbound, Pallet, Stock Gudang, Opname).
+            Ekspor Laporan Gudang Pancawati (Incoming, Outbound, Stock Inventory Gudang, Stock Opname).
           </p>
         </div>
 

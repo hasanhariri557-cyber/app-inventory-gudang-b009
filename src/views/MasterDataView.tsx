@@ -24,6 +24,7 @@ export const MasterDataView: React.FC = () => {
   const [maxStock, setMaxStock] = useState<number>(5000);
   const [lokasiDefaut, setLokasiDefault] = useState('Gedung A1');
   const [statusAktif, setStatusAktif] = useState(true);
+  const [currentStock, setCurrentStock] = useState<string>('0');
 
   const openCreateModal = () => {
     setEditingMaterial(null);
@@ -44,6 +45,7 @@ export const MasterDataView: React.FC = () => {
     setMaxStock(1000);
     setLokasiDefault('Gedung A1');
     setStatusAktif(true);
+    setCurrentStock('0');
     setIsModalOpen(true);
   };
 
@@ -57,12 +59,23 @@ export const MasterDataView: React.FC = () => {
     setMaxStock(mat.maxStock);
     setLokasiDefault(mat.lokasiDefaut || 'Gedung A1');
     setStatusAktif(mat.statusAktif);
+    setCurrentStock(String(mat.currentStock));
     setIsModalOpen(true);
   };
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!namaBarang.trim()) return;
+
+    const parseVal = (v: any) => {
+      if (typeof v === 'number') return v;
+      if (!v) return 0;
+      const clean = String(v).replace(/,/g, '.');
+      const parsed = parseFloat(clean);
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    const parsedStock = parseVal(currentStock);
 
     if (editingMaterial) {
       updateMaterial(editingMaterial.id, {
@@ -72,7 +85,8 @@ export const MasterDataView: React.FC = () => {
         minStock,
         maxStock,
         lokasiDefaut,
-        statusAktif
+        statusAktif,
+        currentStock: parsedStock
       });
     } else {
       addMaterial({
@@ -83,7 +97,8 @@ export const MasterDataView: React.FC = () => {
         minStock,
         maxStock,
         lokasiDefaut,
-        statusAktif
+        statusAktif,
+        currentStock: parsedStock
       });
     }
 
@@ -375,20 +390,35 @@ export const MasterDataView: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Lokasi Default Gedung</label>
-                <select
-                  value={lokasiDefaut}
-                  onChange={e => setLokasiDefault(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="Gedung A1">Gedung A1</option>
-                  <option value="Gedung A2">Gedung A2</option>
-                  <option value="Gedung B1">Gedung B1</option>
-                  <option value="Gedung B2">Gedung B2</option>
-                  <option value="Gedung E1">Gedung E1</option>
-                  <option value="Gedung C1">Gedung C1</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Lokasi Default Gedung</label>
+                  <select
+                    value={lokasiDefaut}
+                    onChange={e => setLokasiDefault(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Gedung A1">Gedung A1</option>
+                    <option value="Gedung A2">Gedung A2</option>
+                    <option value="Gedung B1">Gedung B1</option>
+                    <option value="Gedung B2">Gedung B2</option>
+                    <option value="Gedung E1">Gedung E1</option>
+                    <option value="Gedung C1">Gedung C1</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Stok Sistem (Qty Sistem)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    required
+                    value={currentStock}
+                    onChange={e => setCurrentStock(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-bold"
+                    placeholder="e.g. 100"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center space-x-2 pt-2">

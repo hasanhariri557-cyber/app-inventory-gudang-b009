@@ -928,7 +928,7 @@ export const SettingView: React.FC = () => {
                 <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
                   <Image className="w-5 h-5" />
                 </div>
-                <span>Ubah Logo Foto & Judul WMS Gudang (Admin Branding)</span>
+                <span>Ubah Profil & Judul WMS Gudang</span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
                 Ganti foto logo header dan judul nama aplikasi. Logo baru disimpan di database lokal & diperbarui di seluruh header sistem WMS secara real-time.
@@ -1019,7 +1019,7 @@ export const SettingView: React.FC = () => {
                 {previewLogo && (
                   <div className="flex items-center space-x-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span className="truncate font-semibold">Foto logo kustom siap disimpan ke database sistem.</span>
+                    <span className="truncate font-semibold">Foto logo siap disimpan ke database sistem.</span>
                   </div>
                 )}
               </div>

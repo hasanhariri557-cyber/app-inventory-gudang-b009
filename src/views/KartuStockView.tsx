@@ -193,7 +193,7 @@ export const KartuStockView: React.FC = () => {
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center space-x-1.5 transition-all"
           >
             <Printer className="w-4 h-4" />
-            <span>Cetak Kartu PDF</span>
+            <span>Cetak PDF</span>
           </button>
         </div>
       </div>
@@ -242,7 +242,7 @@ export const KartuStockView: React.FC = () => {
               <span>Tren Aliran Masuk & Keluar (30 Hari Terakhir)</span>
             </h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Grafik perbandingan volume barang masuk vs keluar untuk mendeteksi tingkat perputaran.
+              Grafik Perbandingan Volume Barang Masuk Vs Barang Keluar Untuk Mendeteksi Tingkat Perputaran.
             </p>
           </div>
 

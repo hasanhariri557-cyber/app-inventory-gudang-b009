@@ -449,10 +449,10 @@ _Dikirim dari Sistem WMS Pergudangan_`;
               <div className="p-2 bg-blue-600/30 text-blue-200 border border-blue-400/30 backdrop-blur-md rounded-xl">
                 <LayoutDashboard className="w-5 h-5 text-blue-300" />
               </div>
-              <span>Dashboard Gudang Pancawati B009</span>
+              <span>DASHBOARD GUDANG PANCAWATI-PT MIM</span>
             </h1>
             <p className="text-xs text-blue-100/80 mt-1">
-              Ringkasan status semua operasional gudang pancawati, dan akurasi stok hari ini.
+              Report Status Operasional Gudang Pancawati,Daily Activity, Stock Opname Harian.
             </p>
           </div>
 
@@ -482,7 +482,7 @@ _Dikirim dari Sistem WMS Pergudangan_`;
                   title="Bagikan Ringkasan Statistik Dashboard ke WhatsApp"
                 >
                   <Share2 className="w-3.5 h-3.5" />
-                  <span>Share WA</span>
+                  <span>Share WhatsApp</span>
                 </button>
 
                 <div className="flex items-center space-x-2 bg-blue-950/80 px-3 py-1.5 rounded-xl border border-blue-400/30 backdrop-blur-md">
@@ -639,7 +639,7 @@ _Dikirim dari Sistem WMS Pergudangan_`;
         <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Grafik Pallet In vs Out</h3>
+              <h3 className="text-sm font-bold text-slate-900">Grafik Pallet Inbound Vs Outbound</h3>
               <p className="text-[11px] text-slate-500">Jumlah pallet diproses di dock gudang</p>
             </div>
             <span className="px-2.5 py-1 text-[10px] font-semibold bg-slate-100 text-slate-600 rounded-md">Dock Activity</span>
@@ -711,7 +711,7 @@ _Dikirim dari Sistem WMS Pergudangan_`;
               <AlertTriangle className="w-4 h-4 text-amber-500" />
               <span>Daftar Barang Stok Minimum / Habis</span>
             </h3>
-            <span className="text-xs text-slate-500 font-medium">Peringatan Pengadaan</span>
+            <span className="text-xs text-slate-500 font-medium">Stock Fisik Dan Sistem Kosong</span>
           </div>
 
           <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
@@ -755,7 +755,7 @@ _Dikirim dari Sistem WMS Pergudangan_`;
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <ClipboardCheck className="w-4 h-4 text-purple-600" />
-              <span>Report Stock Opname Kategori</span>
+              <span>Report Stock Opname Per Kategori</span>
             </h3>
             <span className="text-xs text-slate-500 font-medium font-semibold uppercase tracking-wider">Ringkasan Audit</span>
           </div>
