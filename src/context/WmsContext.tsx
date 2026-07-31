@@ -212,12 +212,34 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [materials, setMaterials] = useState<Material[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_materials`);
-    return saved ? JSON.parse(saved) : INITIAL_MATERIALS;
+    if (!saved) return INITIAL_MATERIALS;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const existingIds = new Set(parsed.map((m: Material) => m.id));
+        const missing = INITIAL_MATERIALS.filter(m => !existingIds.has(m.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_MATERIALS;
+    } catch {
+      return INITIAL_MATERIALS;
+    }
   });
 
   const [gedungList, setGedungList] = useState<Gedung[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_gedung`);
-    return saved ? JSON.parse(saved) : INITIAL_GEDUNG;
+    if (!saved) return INITIAL_GEDUNG;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const existingIds = new Set(parsed.map((g: Gedung) => g.id));
+        const missing = INITIAL_GEDUNG.filter(g => !existingIds.has(g.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_GEDUNG;
+    } catch {
+      return INITIAL_GEDUNG;
+    }
   });
 
   const [vendors, setVendors] = useState<Vendor[]>(() => {
@@ -227,11 +249,33 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [categories, setCategories] = useState<MasterSettingItem[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_categories`);
-    return saved ? JSON.parse(saved) : INITIAL_CATEGORIES;
+    if (!saved) return INITIAL_CATEGORIES;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const existingIds = new Set(parsed.map((c: MasterSettingItem) => c.id));
+        const missing = INITIAL_CATEGORIES.filter(c => !existingIds.has(c.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_CATEGORIES;
+    } catch {
+      return INITIAL_CATEGORIES;
+    }
   });
   const [units, setUnits] = useState<MasterSettingItem[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_units`);
-    return saved ? JSON.parse(saved) : INITIAL_UNITS;
+    if (!saved) return INITIAL_UNITS;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const existingIds = new Set(parsed.map((u: MasterSettingItem) => u.id));
+        const missing = INITIAL_UNITS.filter(u => !existingIds.has(u.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_UNITS;
+    } catch {
+      return INITIAL_UNITS;
+    }
   });
   const [zones, setZones] = useState<MasterSettingItem[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_zones`);

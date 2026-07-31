@@ -471,6 +471,7 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({ isOpen, onCl
               satuan: sat,
               minStock: minS,
               maxStock: maxS,
+              currentStock: Number(row['Current Stock'] || row['currentStock'] || 0),
               lokasiDefaut: 'Gedung A1',
               statusAktif: true
             });
