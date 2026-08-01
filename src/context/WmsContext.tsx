@@ -87,10 +87,12 @@ interface WmsContextType {
   adminAuthorities: AdminAuthorities;
   menuConfigs: MenuConfigSettings;
   
-  // App Branding Settings (Logo & Title)
+  // App Branding Settings (Logo & Title) & Auto Banner
   appLogoUrl: string | null;
   appTitle: string;
+  autoBannerText: string;
   updateAppBranding: (logoUrl: string | null, title: string) => void;
+  updateAutoBannerText: (text: string) => void;
   
   // Dashboard Metrics
   kpis: {
@@ -340,6 +342,10 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return localStorage.getItem(`${LOCAL_STORAGE_KEY}_appTitle`) || 'WMS Gudang';
   });
 
+  const [autoBannerText, setAutoBannerText] = useState<string>(() => {
+    return localStorage.getItem('wms_auto_banner_text') || '📌 Operasional Gudang Sewa Pancawati Berjalan Normal • Pastikan Pencatatan Barang Masuk & Keluar Sesuai Prosedur K3 & SOP WMS Gudang';
+  });
+
   const [firebaseSyncStatus, setFirebaseSyncStatus] = useState<'loading' | 'synced' | 'error' | 'offline'>('loading');
 
   const lastCloudStrings = React.useRef<{ [key: string]: string }>({});
@@ -587,12 +593,6 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_isLoggedIn`, String(isLoggedIn));
   }, [isLoggedIn]);
-
-  const updateAppBranding = (logoUrl: string | null, title: string) => {
-    setAppLogoUrl(logoUrl);
-    setAppTitle(title || 'WMS Gudang');
-    showNotification('Branding & Logo Diperbarui', 'Logo foto dan Judul Aplikasi WMS berhasil disimpan.', 'success', 'Setting Admin');
-  };
 
   // Global Notification State
   const [notification, setNotification] = useState<NotificationData>({
@@ -887,6 +887,27 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }));
     showNotification('Pengaturan Menu Diperbarui', `Konfigurasi parameter menu ${menuKey} berhasil disimpan.`, 'success', 'Konfigurasi Menu');
+  };
+
+  const updateAppBranding = (logoUrl: string | null, title: string) => {
+    setAppLogoUrl(logoUrl);
+    setAppTitle(title);
+    if (logoUrl) {
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_appLogoUrl`, logoUrl);
+    } else {
+      localStorage.removeItem(`${LOCAL_STORAGE_KEY}_appLogoUrl`);
+    }
+    localStorage.setItem(`${LOCAL_STORAGE_KEY}_appTitle`, title);
+    showNotification('Branding WMS Diperbarui', `Logo dan Judul "${title}" berhasil disimpan.`, 'success', 'Pengaturan System');
+  };
+
+  const updateAutoBannerText = (text: string) => {
+    const trimmed = text.trim();
+    if (trimmed) {
+      setAutoBannerText(trimmed);
+      localStorage.setItem('wms_auto_banner_text', trimmed);
+      showNotification('Banner Text Diperbarui', 'Teks pengumuman banner running text berhasil disimpan & diperbarui.', 'success', 'Setting System');
+    }
   };
 
   // Handlers
@@ -1255,7 +1276,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveStockOpnameAdjustment = (id: string) => {
-    if (adminAuthorities.approveStockOpnameAdjustment && currentUser.role !== 'Admin') {
+    if (currentUser.role !== 'Admin') {
       showNotification('Akses Ditolak', 'Hanya role Admin yang memiliki otoritas untuk menyetujui penyesuaian stok opname.', 'error', 'Stock Opname');
       return;
     }
@@ -1660,7 +1681,9 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       menuConfigs,
       appLogoUrl,
       appTitle,
+      autoBannerText,
       updateAppBranding,
+      updateAutoBannerText,
       kpis,
       notification,
       showNotification,

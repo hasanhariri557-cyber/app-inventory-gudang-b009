@@ -28,11 +28,8 @@ const PRESET_MESSAGES = [
 ];
 
 export const AutoBanner: React.FC = () => {
-  const { currentUser } = useWms();
+  const { currentUser, autoBannerText, updateAutoBannerText } = useWms();
   const [time, setTime] = useState<Date>(new Date());
-  const [bannerText, setBannerText] = useState<string>(() => {
-    return localStorage.getItem('wms_auto_banner_text') || DEFAULT_BANNER_TEXT;
-  });
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [tempText, setTempText] = useState<string>('');
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
@@ -45,19 +42,17 @@ export const AutoBanner: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Save text to localStorage when updated
+  // Save text via WmsContext
   const handleSaveText = () => {
     const trimmed = tempText.trim();
     if (trimmed) {
-      setBannerText(trimmed);
-      localStorage.setItem('wms_auto_banner_text', trimmed);
+      updateAutoBannerText(trimmed);
     }
     setIsEditing(false);
   };
 
   const handleSelectPreset = (msg: string) => {
-    setBannerText(msg);
-    localStorage.setItem('wms_auto_banner_text', msg);
+    updateAutoBannerText(msg);
     setIsEditing(false);
   };
 
@@ -130,27 +125,48 @@ export const AutoBanner: React.FC = () => {
           </div>
         </div>
 
-        {/* Center / Right Section: Teks Pengumuman Banner */}
+        {/* Center / Right Section: Teks Pengumuman Banner (Running Text Marquee) */}
         {!isMinimized && (
-          <div className="flex-1 min-w-0 bg-slate-950/40 backdrop-blur-md border border-white/10 rounded-xl p-2.5 flex items-center justify-between gap-2.5 shadow-inner">
-            <div className="flex items-center space-x-2.5 min-w-0 flex-1">
-              <div className="p-1.5 bg-amber-500/20 text-amber-300 rounded-lg shrink-0 border border-amber-500/30">
+          <div className="flex-1 min-w-0 bg-slate-950/50 backdrop-blur-md border border-white/10 rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-2.5 shadow-inner overflow-hidden">
+            <style>{`
+              @keyframes wmsBannerMarquee {
+                0% { transform: translateX(0%); }
+                100% { transform: translateX(-50%); }
+              }
+              .animate-wms-marquee {
+                animation: wmsBannerMarquee 28s linear infinite;
+              }
+              .animate-wms-marquee:hover {
+                animation-play-state: paused;
+              }
+            `}</style>
+            
+            <div className="flex items-center space-x-2.5 min-w-0 flex-1 overflow-hidden relative">
+              <div className="p-1.5 bg-amber-500/20 text-amber-300 rounded-lg shrink-0 border border-amber-500/30 z-10 bg-slate-900/90 shadow-sm">
                 <Megaphone className="w-4 h-4 animate-bounce" />
               </div>
-              <div className="text-xs font-medium text-slate-200 truncate leading-relaxed">
-                <span className="text-amber-300 font-bold mr-1">Teks Informasi:</span>
-                <span>{bannerText}</span>
+              
+              <div className="hidden sm:flex items-center space-x-1 shrink-0 z-10 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 text-amber-300 font-bold text-[11px] whitespace-nowrap shadow-xs">
+                <span>INFO:</span>
+              </div>
+
+              {/* Running Marquee Container */}
+              <div className="overflow-hidden whitespace-nowrap w-full relative text-xs font-medium text-slate-100 py-0.5 cursor-default">
+                <div className="inline-block whitespace-nowrap animate-wms-marquee">
+                  <span className="inline-block pr-12 text-slate-100 font-medium tracking-wide">{autoBannerText}</span>
+                  <span className="inline-block pr-12 text-slate-100 font-medium tracking-wide">{autoBannerText}</span>
+                </div>
               </div>
             </div>
 
             {/* Edit Button */}
             <button
               onClick={() => {
-                setTempText(bannerText);
+                setTempText(autoBannerText);
                 setIsEditing(true);
               }}
               title="Ubah teks pengumuman banner"
-              className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-slate-200 text-[11px] font-semibold rounded-lg border border-white/15 transition-all shrink-0 flex items-center space-x-1 cursor-pointer"
+              className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-slate-200 text-[11px] font-semibold rounded-lg border border-white/15 transition-all shrink-0 flex items-center space-x-1 cursor-pointer z-10 shadow-sm"
             >
               <Edit3 className="w-3 h-3 text-indigo-300" />
               <span className="hidden sm:inline">Ubah Text</span>

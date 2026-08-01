@@ -38,7 +38,8 @@ import {
   CloudUpload,
   RefreshCw,
   ExternalLink,
-  Loader2
+  Loader2,
+  Megaphone
 } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { User, Vendor, Gedung, MasterSettingItem, UserRole, MenuKey, MenuConfigSettings, AdminAuthorities } from '../types';
@@ -66,7 +67,9 @@ export const SettingView: React.FC = () => {
     menuConfigs,
     appLogoUrl,
     appTitle,
+    autoBannerText,
     updateAppBranding,
+    updateAutoBannerText,
     addUser,
     deleteUser,
     addVendor,
@@ -450,6 +453,25 @@ export const SettingView: React.FC = () => {
     setInputTitle('WMS Gudang');
     updateAppBranding(null, 'WMS Gudang');
   };
+
+  // Running Banner Text State & Handler
+  const [bannerTextInput, setBannerTextInput] = useState(autoBannerText);
+  useEffect(() => {
+    setBannerTextInput(autoBannerText);
+  }, [autoBannerText]);
+
+  const handleSaveBannerText = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateAutoBannerText(bannerTextInput);
+  };
+
+  const PRESET_BANNER_MESSAGES = [
+    "📌 Operasional Gudang Sewa Pancawati Berjalan Normal • Pastikan Pencatatan Barang Masuk & Keluar Sesuai Prosedur K3 & SOP WMS Gudang",
+    "⚡ Jadwal Stock Opname Harian: Pastikan verifikasi fisik lokasi rak & gedung sesuai dengan data master.",
+    "⚠️ Himbauan K3 & Keamanan: Seluruh staf shift wajib menggunakan APD lengkap, helm, dan sepatu safety.",
+    "📦 Penerimaan Barang (Incoming): Selalu lakukan audit fisik & pengecekan kondisi pallet sebelum tandatangan SJ.",
+    "🚚 Pengeluaran Barang (Outbound): Cek kembali Nomor DO, Plat Kendaraan, dan kelengkapan Surat Jalan Resmi."
+  ];
 
   // Sub-tab for menu settings
   const [selectedMenuConfigKey, setSelectedMenuConfigKey] = useState<keyof MenuConfigSettings>('dashboard');
@@ -1093,6 +1115,87 @@ export const SettingView: React.FC = () => {
               </button>
             </div>
           </form>
+
+          {/* Pengaturan Teks Informasi Banner Berjalan (Running Text) */}
+          <div className="border-t border-slate-200 pt-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <div className="p-1.5 bg-amber-100 text-amber-700 rounded-lg">
+                    <Megaphone className="w-4 h-4" />
+                  </div>
+                  <span>Pengaturan Teks Pengumuman Banner Berjalan (Running Text)</span>
+                </h4>
+                <p className="text-xs text-slate-500 mt-1">
+                  Ubah isi pesan pengumuman banner yang berjalan secara continuous marquee di bagian atas seluruh menu WMS Gudang.
+                </p>
+              </div>
+
+              <span className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full shrink-0">
+                Banner Real-Time System
+              </span>
+            </div>
+
+            {/* Live Preview Banner Ticker */}
+            <div className="p-3 bg-slate-950 text-white rounded-xl border border-slate-800 shadow-inner overflow-hidden">
+              <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block" />
+                Preview Teks Berjalan (Marquee):
+              </p>
+              <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 overflow-hidden relative">
+                <div className="overflow-hidden whitespace-nowrap w-full text-xs font-medium text-slate-200">
+                  <div className="inline-block whitespace-nowrap animate-wms-marquee">
+                    <span className="inline-block pr-12">{bannerTextInput || 'Belum ada teks banner...'}</span>
+                    <span className="inline-block pr-12">{bannerTextInput || 'Belum ada teks banner...'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveBannerText} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  Input Teks Banner Kustom
+                </label>
+                <textarea
+                  rows={3}
+                  value={bannerTextInput}
+                  onChange={(e) => setBannerTextInput(e.target.value)}
+                  placeholder="Ketik teks pengumuman banner berjalan di sini..."
+                  className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 leading-relaxed shadow-xs"
+                />
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1.5">
+                  Pilih Templat Pesan Cepat:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {PRESET_BANNER_MESSAGES.map((msg, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setBannerTextInput(msg)}
+                      className="text-left p-2.5 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 border border-slate-200 rounded-xl text-[11px] font-medium text-slate-700 hover:text-amber-900 transition-all cursor-pointer leading-snug"
+                    >
+                      {msg}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-2 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Simpan Teks Banner Running Text</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

@@ -51,26 +51,38 @@ export const LoginView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-50 flex flex-col items-center justify-center p-4 sm:p-6 select-none relative overflow-y-auto">
+    <div className="min-h-screen w-full bg-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 select-none relative overflow-y-auto">
       
-      {/* Background Decorative Element */}
-      <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none opacity-80" />
+      {/* Background Warehouse Image */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none"
+        style={{
+          backgroundImage: `url('https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=2000')`
+        }}
+      />
 
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden relative z-10 flex flex-col my-auto animate-fade-in">
+      {/* Dark Overlay for High Contrast */}
+      <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-[2px] bg-gradient-to-t from-slate-950/90 via-slate-900/70 to-slate-950/80 pointer-events-none" />
+
+      <div className="w-full max-w-md bg-white border border-slate-200/90 rounded-2xl shadow-2xl overflow-hidden relative z-10 flex flex-col my-auto animate-fade-in">
         
         {/* Top Header Section */}
-        <div className="px-6 py-5 bg-slate-50 border-b border-slate-200 flex flex-col items-center text-center">
-          {appLogoUrl ? (
-            <img 
-              src={appLogoUrl} 
-              alt="Logo WMS" 
-              className="w-16 h-16 object-contain rounded-2xl border border-slate-200 bg-white p-1 shadow-sm mb-3" 
-            />
-          ) : (
-            <div className="p-3 bg-indigo-600 rounded-2xl shadow-sm text-white mb-3">
-              <Boxes className="w-8 h-8" />
-            </div>
-          )}
+        <div className="px-6 py-6 bg-slate-50/80 border-b border-slate-200/80 flex flex-col items-center text-center">
+          {/* Company Logo White Container */}
+          <div className="mb-3.5 p-3 bg-white rounded-2xl border border-slate-200/80 shadow-md ring-4 ring-indigo-50/60 flex items-center justify-center transition-all">
+            {appLogoUrl ? (
+              <img 
+                src={appLogoUrl} 
+                alt="Logo WMS" 
+                className="w-14 h-14 sm:w-16 sm:h-16 object-contain" 
+              />
+            ) : (
+              <div className="p-2.5 bg-indigo-600 rounded-xl text-white shadow-xs">
+                <Boxes className="w-8 h-8 sm:w-9 sm:h-9" />
+              </div>
+            )}
+          </div>
+
           <h2 className="font-bold text-slate-900 text-lg sm:text-xl tracking-tight">
             {appTitle || 'WMS Gudang'}
           </h2>
@@ -149,7 +161,7 @@ export const LoginView: React.FC = () => {
       </div>
 
       {/* Footer copyright */}
-      <div className="text-slate-400 text-[10px] text-center mt-6 z-10">
+      <div className="text-slate-300/90 text-[11px] font-medium text-center mt-6 z-10 drop-shadow-xs">
         &copy; {new Date().getFullYear()} {appTitle || 'WMS Gudang'} • Powered By Hasan Hariri
       </div>
 

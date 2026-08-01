@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Layers,
+  MapPin,
   Check,
   Trash2,
   User,
@@ -14,7 +15,8 @@ import {
   Info,
   CheckSquare,
   RotateCcw,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Lock
 } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { exportToExcel } from '../utils/exportUtils';
@@ -23,6 +25,7 @@ export const StockOpnameView: React.FC = () => {
   const {
     stockOpnames,
     materials,
+    gedungList,
     currentUser,
     addStockOpname,
     approveStockOpnameAdjustment,
@@ -31,11 +34,13 @@ export const StockOpnameView: React.FC = () => {
     showNotification
   } = useWms();
 
+  const isAdmin = currentUser.role === 'Admin';
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState('Semua');
+  const [activeLocationFilter, setActiveLocationFilter] = useState('Semua');
 
   // Single Item Form State
   const [selectedMaterialId, setSelectedMaterialId] = useState(materials[0]?.id || '');
@@ -46,7 +51,7 @@ export const StockOpnameView: React.FC = () => {
   const [confirmingOpnameItem, setConfirmingOpnameItem] = useState<any | null>(null);
 
   // Bulk Item Form State
-  const [selectedBulkCategory, setSelectedBulkCategory] = useState<string | null>(null);
+  const [selectedBulkLocation, setSelectedBulkLocation] = useState<string | null>(null);
   // Store physical qty & notes indexed by materialId
   const [bulkQtyInputs, setBulkQtyInputs] = useState<Record<string, string>>({});
   const [bulkNoteInputs, setBulkNoteInputs] = useState<Record<string, string>>({});
@@ -68,29 +73,33 @@ export const StockOpnameView: React.FC = () => {
     return m.id.toLowerCase().includes(term) || m.namaBarang.toLowerCase().includes(term);
   });
 
-  // Unique active categories gathered from setting list and materials
-  const activeCategories = useMemo(() => {
+  // Unique active locations gathered from gedungList and materials (lokasiDefaut/lokasiUtama)
+  const activeLocations = useMemo(() => {
     const set = new Set<string>();
-    if (contextCategories) {
-      contextCategories.forEach(c => {
-        if (c.nama && c.nama.trim()) {
-          set.add(c.nama.trim());
+    if (gedungList) {
+      gedungList.forEach(g => {
+        if (g.nama && g.nama.trim()) {
+          set.add(g.nama.trim());
         }
       });
     }
     materials.forEach(m => {
-      if (m.kategori && m.kategori.trim()) {
-        set.add(m.kategori.trim());
+      const loc = m.lokasiDefaut || m.lokasiUtama;
+      if (loc && loc.trim()) {
+        set.add(loc.trim());
       }
     });
     return Array.from(set);
-  }, [contextCategories, materials]);
+  }, [gedungList, materials]);
 
-  // Materials belonging to the selected bulk category
-  const bulkCategoryMaterials = useMemo(() => {
-    if (!selectedBulkCategory) return [];
-    return materials.filter(m => m.kategori?.trim() === selectedBulkCategory.trim() && m.statusAktif);
-  }, [materials, selectedBulkCategory]);
+  // Materials belonging to the selected bulk location
+  const bulkLocationMaterials = useMemo(() => {
+    if (!selectedBulkLocation) return [];
+    return materials.filter(m => {
+      const loc = (m.lokasiDefaut || m.lokasiUtama || 'Gedung A1').trim();
+      return loc === selectedBulkLocation.trim() && m.statusAktif;
+    });
+  }, [materials, selectedBulkLocation]);
 
   const handleOpenModal = () => {
     const defaultMat = materials[0];
@@ -133,25 +142,28 @@ export const StockOpnameView: React.FC = () => {
 
   // Open the Bulk/Split Stock Opname Modal and initialize state
   const handleOpenBulkModal = () => {
-    setSelectedBulkCategory(null);
+    setSelectedBulkLocation(null);
     setBulkQtyInputs({});
     setBulkNoteInputs({});
     setBulkCheckedItems({});
     setIsBulkModalOpen(true);
   };
 
-  // Select a category inside the Bulk modal
-  const handleSelectBulkCategory = (categoryName: string) => {
-    setSelectedBulkCategory(categoryName);
+  // Select a location inside the Bulk modal
+  const handleSelectBulkLocation = (locationName: string) => {
+    setSelectedBulkLocation(locationName);
     
-    // Fetch all materials in this category and pre-populate state
-    const matsInCat = materials.filter(m => m.kategori?.trim() === categoryName.trim() && m.statusAktif);
+    // Fetch all materials in this location and pre-populate state
+    const matsInLoc = materials.filter(m => {
+      const loc = (m.lokasiDefaut || m.lokasiUtama || 'Gedung A1').trim();
+      return loc === locationName.trim() && m.statusAktif;
+    });
     
     const initialQtys: Record<string, string> = {};
     const initialNotes: Record<string, string> = {};
     const initialChecked: Record<string, boolean> = {};
 
-    matsInCat.forEach(m => {
+    matsInLoc.forEach(m => {
       // Pre-fill physical qty input with default '0'
       initialQtys[m.id] = '0';
       initialNotes[m.id] = '';
@@ -165,10 +177,10 @@ export const StockOpnameView: React.FC = () => {
 
   const handleBulkSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBulkCategory) return;
+    if (!selectedBulkLocation) return;
 
     let countSaved = 0;
-    bulkCategoryMaterials.forEach(m => {
+    bulkLocationMaterials.forEach(m => {
       // Only record if it is checked
       if (bulkCheckedItems[m.id]) {
         const physicalQty = parseVal(bulkQtyInputs[m.id] ?? m.currentStock);
@@ -189,8 +201,8 @@ export const StockOpnameView: React.FC = () => {
 
     if (countSaved > 0) {
       showNotification(
-        'Opname Kategori Berhasil',
-        `Berhasil menyimpan ${countSaved} hasil perhitungan fisik untuk kategori ${selectedBulkCategory}.`,
+        'Opname Lokasi Berhasil',
+        `Berhasil menyimpan ${countSaved} hasil perhitungan fisik untuk lokasi ${selectedBulkLocation}.`,
         'success',
         'Stock Opname'
       );
@@ -208,6 +220,11 @@ export const StockOpnameView: React.FC = () => {
 
   const handleDeleteConfirm = async () => {
     if (!deleteConfirmId) return;
+    if (!isAdmin) {
+      showNotification('Akses Ditolak', 'Hanya Admin yang memiliki otoritas untuk menghapus data stock opname.', 'error', 'Stock Opname');
+      setDeleteConfirmId(null);
+      return;
+    }
     try {
       await deleteStockOpname(deleteConfirmId);
       showNotification('Catatan Dihapus', 'Catatan stock opname berhasil dihapus dari riwayat.', 'info', 'Stock Opname');
@@ -219,6 +236,10 @@ export const StockOpnameView: React.FC = () => {
   };
 
   const handleRecount = (materialId: string, lastQtyFisik?: number, lastPenyebab?: string) => {
+    if (!isAdmin) {
+      showNotification('Akses Ditolak', 'Hanya Admin yang memiliki otoritas untuk menghitung ulang stok opname.', 'error', 'Stock Opname');
+      return;
+    }
     const mat = materials.find(m => m.id === materialId);
     if (mat) {
       setSelectedMaterialId(mat.id);
@@ -231,19 +252,19 @@ export const StockOpnameView: React.FC = () => {
     }
   };
 
-  // Filter history list based on search and selected category tab
+  // Filter history list based on search and selected location tab
   const filteredOpnames = stockOpnames.filter(s => {
     const matchesSearch =
       s.namaBarang.toLowerCase().includes(search.toLowerCase()) ||
       s.materialId.toLowerCase().includes(search.toLowerCase()) ||
       s.pic.toLowerCase().includes(search.toLowerCase());
 
-    if (activeCategoryFilter === 'Semua') {
+    if (activeLocationFilter === 'Semua') {
       return matchesSearch;
     } else {
       const material = materials.find(m => m.id === s.materialId);
-      const category = material?.kategori || 'Lain-lain';
-      return matchesSearch && category.trim() === activeCategoryFilter.trim();
+      const location = material?.lokasiDefaut || material?.lokasiUtama || 'Gedung A1';
+      return matchesSearch && location.trim() === activeLocationFilter.trim();
     }
   });
 
@@ -256,10 +277,10 @@ export const StockOpnameView: React.FC = () => {
       const mat = materials.find(m => m.id === s.materialId);
       return {
         'Tanggal': s.tanggal,
+        'Lokasi Gudang': mat?.lokasiDefaut || mat?.lokasiUtama || 'Gedung A1',
         'Kategori': mat?.kategori || 'Lain-lain',
         'Material ID': s.materialId,
         'Nama Barang': s.namaBarang,
-        'Lokasi Gudang': mat?.lokasiDefaut || '-',
         'Qty Sistem (saat Opname)': s.qtySistem,
         'Qty Fisik (saat Opname)': s.qtyFisik,
         'Selisih': s.selisih,
@@ -269,7 +290,7 @@ export const StockOpnameView: React.FC = () => {
         'Status': s.status
       };
     });
-    exportToExcel(rows, `Laporan_Stock_Opname_Harian_${activeCategoryFilter.replace(/[^a-zA-Z0-9]/g, '_')}`, 'Stock_Opname');
+    exportToExcel(rows, `Laporan_Stock_Opname_Harian_Lokasi_${activeLocationFilter.replace(/[^a-zA-Z0-9]/g, '_')}`, 'Stock_Opname');
     showNotification('Ekspor Berhasil', 'Data stock opname berhasil diekspor ke file Excel.', 'success', 'Stock Opname');
   };
 
@@ -286,7 +307,7 @@ export const StockOpnameView: React.FC = () => {
             <span>Stock Opname Harian</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Report Perhitungan Fisik Harian Per Kategori Untuk Memudahkan PIC Stoker Menginput Hasil Opname Sesuai Jobdesk Areanya.
+            Report Perhitungan Fisik Harian Per Lokasi Gudang Untuk Memudahkan PIC Stoker Menginput Hasil Opname Sesuai Jobdesk Area Lokasinya.
           </p>
         </div>
 
@@ -299,13 +320,13 @@ export const StockOpnameView: React.FC = () => {
             <span>Ekspor Excel</span>
           </button>
 
-          {/* Main call-to-action is bulk input per category */}
+          {/* Main call-to-action is bulk input per location */}
           <button
             onClick={handleOpenBulkModal}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
           >
-            <Layers className="w-4 h-4" />
-            <span>Mulai Hitung per Kategori</span>
+            <MapPin className="w-4 h-4" />
+            <span>Mulai Hitung per Lokasi</span>
           </button>
 
           <button
@@ -333,12 +354,12 @@ export const StockOpnameView: React.FC = () => {
 
         <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex items-start space-x-3">
           <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg shrink-0">
-            <Layers className="w-4 h-4" />
+            <MapPin className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="text-xs font-bold text-indigo-950">Total Kategori Aktif</h4>
-            <p className="text-sm font-semibold text-indigo-800 mt-0.5">{activeCategories.length} Kategori Barang</p>
-            <p className="text-[10px] text-indigo-600">Setiap PIC dapat fokus menghitung dan menyimpan data per kategori barang.</p>
+            <h4 className="text-xs font-bold text-indigo-950">Total Lokasi Gudang Aktif</h4>
+            <p className="text-sm font-semibold text-indigo-800 mt-0.5">{activeLocations.length} Lokasi Gudang</p>
+            <p className="text-[10px] text-indigo-600">Setiap PIC dapat fokus menghitung dan menyimpan data per lokasi/gedung.</p>
           </div>
         </div>
 
@@ -354,7 +375,7 @@ export const StockOpnameView: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter Bar & Category Segmented Tabs */}
+      {/* Filter Bar & Location Segmented Tabs */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1">
@@ -374,35 +395,36 @@ export const StockOpnameView: React.FC = () => {
           </div>
         </div>
 
-        {/* Categories Tabs to filter history */}
+        {/* Location Tabs to filter history */}
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 border-b border-slate-100">
           <button
-            onClick={() => setActiveCategoryFilter('Semua')}
+            onClick={() => setActiveLocationFilter('Semua')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 cursor-pointer ${
-              activeCategoryFilter === 'Semua'
+              activeLocationFilter === 'Semua'
                 ? 'bg-indigo-600 text-white font-semibold'
                 : 'bg-slate-50 text-slate-500 hover:text-slate-800 hover:bg-slate-100'
             }`}
           >
-            Semua Kategori ({stockOpnames.length})
+            Semua Lokasi ({stockOpnames.length})
           </button>
-          {activeCategories.map(cat => {
-            const countInCat = stockOpnames.filter(s => {
+          {activeLocations.map(loc => {
+            const countInLoc = stockOpnames.filter(s => {
               const material = materials.find(m => m.id === s.materialId);
-              return material?.kategori?.trim() === cat.trim();
+              const mLoc = material?.lokasiDefaut || material?.lokasiUtama || 'Gedung A1';
+              return mLoc.trim() === loc.trim();
             }).length;
 
             return (
               <button
-                key={cat}
-                onClick={() => setActiveCategoryFilter(cat)}
+                key={loc}
+                onClick={() => setActiveLocationFilter(loc)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 cursor-pointer ${
-                  activeCategoryFilter === cat
+                  activeLocationFilter === loc
                     ? 'bg-indigo-600 text-white font-semibold'
                     : 'bg-slate-50 text-slate-500 hover:text-slate-800 hover:bg-slate-100'
                 }`}
               >
-                {cat} <span className="text-[10px] opacity-75">({countInCat})</span>
+                {loc} <span className="text-[10px] opacity-75">({countInLoc})</span>
               </button>
             );
           })}
@@ -483,35 +505,44 @@ export const StockOpnameView: React.FC = () => {
                         )}
                       </td>
                       <td className="p-3.5 text-center">
-                        <div className="flex items-center justify-center space-x-2">
-                          {s.status === 'Belum Selesai' && (
+                        {isAdmin ? (
+                          <div className="flex items-center justify-center space-x-2">
+                            {s.status === 'Belum Selesai' && (
+                              <button
+                                onClick={() => approveStockOpnameAdjustment(s.id)}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold rounded-lg flex items-center space-x-1 cursor-pointer transition-colors shadow-xs"
+                                title="Terapkan penyesuaian fisik ke sistem stok gudang (Otoritas Admin)"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Terapkan Stok</span>
+                              </button>
+                            )}
+                            
                             <button
-                              onClick={() => approveStockOpnameAdjustment(s.id)}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold rounded-lg flex items-center space-x-1 cursor-pointer transition-colors shadow-xs"
-                              title="Terapkan penyesuaian fisik ke sistem stok gudang"
+                              onClick={() => handleRecount(s.materialId, s.qtyFisik, s.penyebab)}
+                              className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 text-[10px] font-semibold rounded-lg flex items-center space-x-1 cursor-pointer transition-colors"
+                              title="Hitung ulang material ini (Otoritas Admin)"
                             >
-                              <Check className="w-3 h-3" />
-                              <span>Terapkan Stok</span>
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Hitung Ulang</span>
                             </button>
-                          )}
-                          
-                          <button
-                            onClick={() => handleRecount(s.materialId, s.qtyFisik, s.penyebab)}
-                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 text-[10px] font-semibold rounded-lg flex items-center space-x-1 cursor-pointer transition-colors"
-                            title="Hitung ulang material ini"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            <span>Hitung Ulang</span>
-                          </button>
-                          
-                          <button
-                            onClick={() => setDeleteConfirmId(s.id)}
-                            className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                            title="Hapus opname"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                            
+                            <button
+                              onClick={() => setDeleteConfirmId(s.id)}
+                              className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                              title="Hapus opname (Otoritas Admin)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center">
+                            <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-400 text-[10px] font-medium rounded-lg flex items-center space-x-1 cursor-not-allowed" title="Seluruh tombol aksi (Terapkan Stok, Hitung Ulang, Hapus) sepenuhnya memerlukan Otoritas Admin">
+                              <Lock className="w-3 h-3 text-slate-400" />
+                              <span>Otoritas Admin</span>
+                            </span>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -662,7 +693,7 @@ export const StockOpnameView: React.FC = () => {
         </div>
       )}
 
-      {/* BULK CATEGORY STOCK OPNAME MODAL (Jobdesk PIC Split) */}
+      {/* BULK LOCATION STOCK OPNAME MODAL (Jobdesk PIC Split) */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-950/50 backdrop-blur-xs">
           <div className="bg-white border-0 sm:border border-slate-200 rounded-none sm:rounded-2xl w-full max-w-4xl h-full sm:h-auto max-h-screen sm:max-h-[90vh] shadow-2xl overflow-hidden text-slate-800 flex flex-col">
@@ -671,14 +702,14 @@ export const StockOpnameView: React.FC = () => {
             <div className="px-4 py-3 sm:px-6 sm:py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
               <div className="flex items-center space-x-2.5">
                 <div className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
-                  <Layers className="w-5 h-5" />
+                  <MapPin className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900 text-sm sm:text-base">
-                    Pecah Opname Fisik per Kategori (PIC Jobdesk)
+                    Pecah Opname Fisik per Lokasi / Gedung (PIC Jobdesk)
                   </h3>
                   <p className="text-[10px] text-slate-500 mt-0.5">
-                    Pilih kategori material tugas Anda, hitung fisik langsung, lalu simpan seluruh item kategori sekaligus.
+                    Pilih lokasi gudang tugas Anda, hitung fisik langsung, lalu simpan seluruh item lokasi sekaligus.
                   </p>
                 </div>
               </div>
@@ -693,37 +724,40 @@ export const StockOpnameView: React.FC = () => {
             {/* Modal Body */}
             <div className="overflow-y-auto p-3 sm:p-6 flex-1 space-y-4 sm:space-y-6">
               
-              {/* STEP 1: Select Category */}
-              {!selectedBulkCategory ? (
+              {/* STEP 1: Select Location */}
+              {!selectedBulkLocation ? (
                 <div className="space-y-4">
                   <div className="text-center py-4">
-                    <h4 className="text-sm font-bold text-slate-800">Silakan Pilih Kategori Opname:</h4>
-                    <p className="text-xs text-slate-500 mt-1">PIC Stoker Menghitung Material Dalam Satu Kategori Barang.</p>
+                    <h4 className="text-sm font-bold text-slate-800">Silakan Pilih Lokasi Opname Gudang:</h4>
+                    <p className="text-xs text-slate-500 mt-1">PIC Stoker Menghitung Material Dalam Satu Lokasi / Gedung Area.</p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {activeCategories.map(catName => {
-                      const matsInCat = materials.filter(m => m.kategori?.trim() === catName.trim() && m.statusAktif);
+                    {activeLocations.map(locName => {
+                      const matsInLoc = materials.filter(m => {
+                        const loc = (m.lokasiDefaut || m.lokasiUtama || 'Gedung A1').trim();
+                        return loc === locName.trim() && m.statusAktif;
+                      });
                       
                       return (
                         <button
-                          key={catName}
-                          onClick={() => handleSelectBulkCategory(catName)}
+                          key={locName}
+                          onClick={() => handleSelectBulkLocation(locName)}
                           className="p-5 text-left border border-slate-200 rounded-2xl bg-slate-50 hover:bg-indigo-50/40 hover:border-indigo-300 transition-all group flex flex-col justify-between cursor-pointer space-y-4"
                         >
                           <div className="flex items-start justify-between w-full">
                             <div className="p-2.5 bg-white border border-slate-100 rounded-xl text-slate-700 group-hover:text-indigo-600 transition-all">
-                              <Layers className="w-5 h-5" />
+                              <MapPin className="w-5 h-5" />
                             </div>
                             <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full group-hover:bg-indigo-100 group-hover:text-indigo-800 transition-all">
-                              {matsInCat.length} Item
+                              {matsInLoc.length} Item
                             </span>
                           </div>
 
                           <div>
-                            <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-950 transition-all capitalize">{catName}</h4>
+                            <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-950 transition-all capitalize">{locName}</h4>
                             <p className="text-[10px] text-slate-500 mt-1">
-                              Klik untuk memuat seluruh daftar hitung {catName}.
+                              Klik untuk memuat seluruh daftar hitung lokasi {locName}.
                             </p>
                           </div>
 
@@ -738,23 +772,23 @@ export const StockOpnameView: React.FC = () => {
                 </div>
               ) : (
                 
-                // STEP 2: Input List for Selected Category
+                // STEP 2: Input List for Selected Location
                 <form onSubmit={handleBulkSubmit} className="flex-1 flex flex-col overflow-hidden">
                   
-                  {/* Category Banner */}
+                  {/* Location Banner */}
                   <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
                     <div>
-                      <span className="text-[10px] font-bold text-indigo-700 tracking-wider uppercase bg-indigo-100 px-2 py-0.5 rounded-md">Kategori Terpilih</span>
-                      <h4 className="text-base font-bold text-indigo-950 mt-1 capitalize">{selectedBulkCategory}</h4>
-                      <p className="text-xs text-indigo-800/80 mt-0.5">Ditemukan {bulkCategoryMaterials.length} material terdaftar aktif.</p>
+                      <span className="text-[10px] font-bold text-indigo-700 tracking-wider uppercase bg-indigo-100 px-2 py-0.5 rounded-md">Lokasi Terpilih</span>
+                      <h4 className="text-base font-bold text-indigo-950 mt-1 capitalize">{selectedBulkLocation}</h4>
+                      <p className="text-xs text-indigo-800/80 mt-0.5">Ditemukan {bulkLocationMaterials.length} material terdaftar aktif.</p>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => setSelectedBulkCategory(null)}
+                      onClick={() => setSelectedBulkLocation(null)}
                       className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-semibold rounded-lg transition-all self-start sm:self-center cursor-pointer"
                     >
-                      Kembali Pilih Kategori Lain
+                      Kembali Pilih Lokasi Lain
                     </button>
                   </div>
 
@@ -762,9 +796,9 @@ export const StockOpnameView: React.FC = () => {
                   <div className="overflow-y-auto p-1 sm:p-2 flex-1 space-y-4">
                     
                     {/* Bulk Items Grid/Table */}
-                    {bulkCategoryMaterials.length === 0 ? (
+                    {bulkLocationMaterials.length === 0 ? (
                       <div className="p-12 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-slate-200">
-                        Tidak ada material aktif di kategori ini. Silakan tambahkan material atau aktifkan statusnya di Master Data.
+                        Tidak ada material aktif di lokasi ini. Silakan tambahkan material atau atur lokasi defaultnya di Master Data.
                       </div>
                     ) : (
                       <>
@@ -778,16 +812,16 @@ export const StockOpnameView: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const allChecked = bulkCategoryMaterials.every(m => bulkCheckedItems[m.id]);
+                                    const allChecked = bulkLocationMaterials.every(m => bulkCheckedItems[m.id]);
                                     const nextChecked: Record<string, boolean> = {};
-                                    bulkCategoryMaterials.forEach(m => {
+                                    bulkLocationMaterials.forEach(m => {
                                       nextChecked[m.id] = !allChecked;
                                     });
                                     setBulkCheckedItems(nextChecked);
                                   }}
                                   className="text-[10px] text-indigo-600 hover:underline font-bold"
                                 >
-                                  {bulkCategoryMaterials.every(m => bulkCheckedItems[m.id]) ? 'Uncheck All' : 'Check All'}
+                                  {bulkLocationMaterials.every(m => bulkCheckedItems[m.id]) ? 'Uncheck All' : 'Check All'}
                                 </button>
                               </th>
                               <th className="p-3">Material ID & Nama</th>
@@ -799,7 +833,7 @@ export const StockOpnameView: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {bulkCategoryMaterials.map(m => {
+                            {bulkLocationMaterials.map(m => {
                               const isIncluded = !!bulkCheckedItems[m.id];
                               const inputQty = bulkQtyInputs[m.id] ?? '';
                               const parsedInput = parseVal(inputQty);
@@ -833,7 +867,7 @@ export const StockOpnameView: React.FC = () => {
                                   </td>
                                   <td className="p-3">
                                     <span className="px-2.5 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-[11px] font-bold uppercase tracking-wider">
-                                      {m.lokasiDefaut || '-'}
+                                      {m.lokasiDefaut || m.lokasiUtama || '-'}
                                     </span>
                                   </td>
 
@@ -915,20 +949,20 @@ export const StockOpnameView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            const allChecked = bulkCategoryMaterials.every(m => bulkCheckedItems[m.id]);
+                            const allChecked = bulkLocationMaterials.every(m => bulkCheckedItems[m.id]);
                             const nextChecked: Record<string, boolean> = {};
-                            bulkCategoryMaterials.forEach(m => {
+                            bulkLocationMaterials.forEach(m => {
                               nextChecked[m.id] = !allChecked;
                             });
                             setBulkCheckedItems(nextChecked);
                           }}
                           className="text-xs text-indigo-700 hover:underline font-bold px-2.5 py-1 bg-white border border-indigo-100 rounded-lg shadow-2xs cursor-pointer"
                         >
-                          {bulkCategoryMaterials.every(m => bulkCheckedItems[m.id]) ? 'Sembunyikan Semua' : 'Pilih Semua'}
+                          {bulkLocationMaterials.every(m => bulkCheckedItems[m.id]) ? 'Sembunyikan Semua' : 'Pilih Semua'}
                         </button>
                       </div>
 
-                      {bulkCategoryMaterials.map(m => {
+                      {bulkLocationMaterials.map(m => {
                         const isIncluded = !!bulkCheckedItems[m.id];
                         const inputQty = bulkQtyInputs[m.id] ?? '';
                         const parsedInput = parseVal(inputQty);
@@ -967,7 +1001,7 @@ export const StockOpnameView: React.FC = () => {
                             {/* Informasi Utama: Badges/Label Lokasi Gedung & Stok Sistem */}
                             <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                               <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-md font-extrabold uppercase tracking-wider">
-                                Lokasi: {m.lokasiDefaut || '-'}
+                                Lokasi: {m.lokasiDefaut || m.lokasiUtama || '-'}
                               </span>
 
                             </div>
@@ -1052,7 +1086,7 @@ export const StockOpnameView: React.FC = () => {
                   <span>
                     Daftar Opname:{' '}
                     <strong className="text-indigo-600">
-                      {bulkCategoryMaterials.filter(m => bulkCheckedItems[m.id]).length} dari {bulkCategoryMaterials.length}
+                      {bulkLocationMaterials.filter(m => bulkCheckedItems[m.id]).length} dari {bulkLocationMaterials.length}
                     </strong>{' '}
                     item aktif.
                   </span>
@@ -1068,14 +1102,13 @@ export const StockOpnameView: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={bulkCategoryMaterials.filter(m => bulkCheckedItems[m.id]).length === 0}
+                    disabled={bulkLocationMaterials.filter(m => bulkCheckedItems[m.id]).length === 0}
                     className="flex-[2] sm:flex-none px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer text-center"
                   >
-                    Simpan Semua Opname Kategori
+                    Simpan Semua Opname Lokasi
                   </button>
                 </div>
               </div>
-
             </form>
           )}
 
