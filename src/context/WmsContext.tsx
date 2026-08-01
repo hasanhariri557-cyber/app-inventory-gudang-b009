@@ -16,7 +16,10 @@ import {
   MenuKey,
   RolePermissions,
   AdminAuthorities,
-  MenuConfigSettings
+  MenuConfigSettings,
+  DriverQueueItem,
+  AuditLog,
+  ForkliftActivity
 } from '../types';
 import {
   INITIAL_USERS,
@@ -26,6 +29,8 @@ import {
   INITIAL_CATEGORIES,
   INITIAL_UNITS,
   INITIAL_ZONES,
+  INITIAL_FORKLIFT_UNITS,
+  INITIAL_FORKLIFT_ACTIVITY_TYPES,
   INITIAL_INCOMING,
   INITIAL_REJECTS,
   INITIAL_PUTAWAY,
@@ -35,7 +40,8 @@ import {
   INITIAL_KARTU_STOCK,
   INITIAL_ROLE_PERMISSIONS,
   INITIAL_ADMIN_AUTHORITIES,
-  INITIAL_MENU_CONFIGS
+  INITIAL_MENU_CONFIGS,
+  INITIAL_FORKLIFT_ACTIVITIES
 } from '../data/initialData';
 import { 
   saveToFirestore, 
@@ -69,11 +75,14 @@ interface WmsContextType {
   stockOpnames: StockOpnameItem[];
   mutasis: MutasiBarang[];
   kartuStocks: KartuStockEntry[];
+  forkliftActivities: ForkliftActivity[];
   gedungList: Gedung[];
   vendors: Vendor[];
   categories: MasterSettingItem[];
   units: MasterSettingItem[];
   zones: MasterSettingItem[];
+  forkliftUnits: MasterSettingItem[];
+  forkliftActivityTypes: MasterSettingItem[];
   
   firebaseSyncStatus: 'loading' | 'synced' | 'error' | 'offline';
 
@@ -129,6 +138,9 @@ interface WmsContextType {
   approveStockOpnameAdjustment: (id: string) => void;
   
   addMutasi: (mutasi: Omit<MutasiBarang, 'id' | 'tanggal'>) => void;
+  addForkliftActivity: (act: Omit<ForkliftActivity, 'id' | 'tanggal'>) => void;
+  updateForkliftActivity: (id: string, act: Partial<ForkliftActivity>) => void;
+  deleteForkliftActivity: (id: string) => Promise<void>;
   
   addUser: (u: Omit<User, 'id'>) => void;
   deleteUser: (id: string) => void;
@@ -146,6 +158,12 @@ interface WmsContextType {
   addZone: (z: Omit<MasterSettingItem, 'id'>) => void;
   updateZone: (id: string, z: Partial<MasterSettingItem>) => void;
   deleteZone: (id: string) => void;
+  addForkliftUnit: (u: Omit<MasterSettingItem, 'id'>) => void;
+  updateForkliftUnit: (id: string, u: Partial<MasterSettingItem>) => void;
+  deleteForkliftUnit: (id: string) => void;
+  addForkliftActivityType: (a: Omit<MasterSettingItem, 'id'>) => void;
+  updateForkliftActivityType: (id: string, a: Partial<MasterSettingItem>) => void;
+  deleteForkliftActivityType: (id: string) => void;
   
   deleteIncoming: (id: string) => Promise<void>;
   deleteOutbound: (id: string) => Promise<void>;
@@ -164,6 +182,20 @@ interface WmsContextType {
   quickUpdateMaterialLocations: (materialId: string, newAllocations: Record<string, number>, newDefaultLoc?: string) => Promise<void>;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
+
+  // Gate & Yard Management (Driver Queues)
+  driverQueues: DriverQueueItem[];
+  activeAutofillDriver: DriverQueueItem | null;
+  setActiveAutofillDriver: (driver: DriverQueueItem | null) => void;
+  activeMenu: MenuKey;
+  setActiveMenu: (menu: MenuKey) => void;
+  registerDriverQueue: (driver: { platNomor: string; namaSupir: string; namaVendor: string; noPoSJ: string; aktivitas?: 'Bongkar' | 'Muat' }) => Promise<string>;
+  updateDriverQueueStatus: (id: string, status: DriverQueueItem['status']) => Promise<void>;
+  deleteDriverQueue: (id: string) => Promise<void>;
+
+  // Audit Logs
+  auditLogs: AuditLog[];
+  addAuditLog: (action: AuditLog['action'], module: string, targetName: string, details: string) => void;
 }
 
 const WmsContext = createContext<WmsContextType | undefined>(undefined);
@@ -207,7 +239,21 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_users`);
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as User[];
+        const hasSecurity = parsed.some(u => u.username.toLowerCase() === 'security');
+        if (!hasSecurity) {
+          const updated = [...parsed, { id: 'USR-2', username: 'security', nama: 'Security Officer', role: 'Security', password: '123456', status: 'Aktif' }];
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_users`, JSON.stringify(updated));
+          return updated;
+        }
+        return parsed;
+      } catch (e) {
+        return INITIAL_USERS;
+      }
+    }
+    return INITIAL_USERS;
   });
 
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
@@ -299,10 +345,73 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_ZONES;
   });
 
+  const [forkliftUnits, setForkliftUnits] = useState<MasterSettingItem[]>(() => {
+    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_forklift_units`);
+    return saved ? JSON.parse(saved) : INITIAL_FORKLIFT_UNITS;
+  });
+
+  const [forkliftActivityTypes, setForkliftActivityTypes] = useState<MasterSettingItem[]>(() => {
+    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_forklift_activity_types`);
+    return saved ? JSON.parse(saved) : INITIAL_FORKLIFT_ACTIVITY_TYPES;
+  });
+
+  const addForkliftUnit = (u: Omit<MasterSettingItem, 'id'>) => {
+    setForkliftUnits(prev => [...prev, { ...u, id: `FU-${Date.now()}` }]);
+  };
+
+  const updateForkliftUnit = (id: string, u: Partial<MasterSettingItem>) => {
+    setForkliftUnits(prev => prev.map(item => item.id === id ? { ...item, ...u } : item));
+  };
+
+  const deleteForkliftUnit = (id: string) => {
+    setForkliftUnits(prev => prev.filter(item => item.id !== id));
+  };
+
+  const addForkliftActivityType = (a: Omit<MasterSettingItem, 'id'>) => {
+    setForkliftActivityTypes(prev => [...prev, { ...a, id: `FAT-${Date.now()}` }]);
+  };
+
+  const updateForkliftActivityType = (id: string, a: Partial<MasterSettingItem>) => {
+    setForkliftActivityTypes(prev => prev.map(item => item.id === id ? { ...item, ...a } : item));
+  };
+
+  const deleteForkliftActivityType = (id: string) => {
+    setForkliftActivityTypes(prev => prev.filter(item => item.id !== id));
+  };
+
   const [incomingHeaders, setIncomingHeaders] = useState<IncomingHeader[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_incoming`);
     return saved ? JSON.parse(saved) : [];
   });
+
+  const [driverQueues, setDriverQueues] = useState<DriverQueueItem[]>(() => {
+    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_driver_queues`);
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
+    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_audit_logs`);
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const addAuditLog = (action: AuditLog['action'], module: string, targetName: string, details: string) => {
+    const newLog: AuditLog = {
+      id: `AUD-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      timestamp: new Date().toISOString(),
+      userId: currentUser?.id || 'sys',
+      userName: currentUser?.nama || 'System',
+      userRole: currentUser?.role || 'Admin',
+      action,
+      module,
+      targetName,
+      details
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+  };
+
+  const [activeAutofillDriver, setActiveAutofillDriver] = useState<DriverQueueItem | null>(null);
+
+  const [activeMenu, setActiveMenu] = useState<MenuKey>('dashboard');
 
   const [rejects, setRejects] = useState<RejectIncoming[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_rejects`);
@@ -332,6 +441,11 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [kartuStocks, setKartuStocks] = useState<KartuStockEntry[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_kartu_stock`);
     return saved ? JSON.parse(saved) : INITIAL_KARTU_STOCK;
+  });
+
+  const [forkliftActivities, setForkliftActivities] = useState<ForkliftActivity[]>(() => {
+    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_forklift_activities`);
+    return saved ? JSON.parse(saved) : INITIAL_FORKLIFT_ACTIVITIES;
   });
 
   const [rolePermissions, setRolePermissions] = useState<RolePermissions>(() => {
@@ -382,9 +496,11 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const cloudOpname = await loadCollectionFromFirestore('stockOpnames');
         const cloudMutasi = await loadCollectionFromFirestore('mutasis');
         const cloudKartuStock = await loadCollectionFromFirestore('kartuStocks');
+        const cloudForkliftActivities = await loadCollectionFromFirestore('forkliftActivities');
         const cloudCategories = await loadCollectionFromFirestore('categories');
         const cloudUnits = await loadCollectionFromFirestore('units');
         const cloudZones = await loadCollectionFromFirestore('zones');
+        const cloudAuditLogs = await loadCollectionFromFirestore('auditLogs');
         const cloudPermissions = await loadCollectionFromFirestore('rolePermissions');
         const cloudAdminAuth = await loadCollectionFromFirestore('adminAuthorities');
         const cloudMenuConfigs = await loadCollectionFromFirestore('menuConfigs');
@@ -404,6 +520,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           await syncCollectionToFirestore('stockOpnames', stockOpnames);
           await syncCollectionToFirestore('mutasis', mutasis);
           await syncCollectionToFirestore('kartuStocks', kartuStocks);
+          await syncCollectionToFirestore('forkliftActivities', forkliftActivities);
           await syncCollectionToFirestore('categories', categories);
           await syncCollectionToFirestore('units', units);
           await syncCollectionToFirestore('zones', zones);
@@ -444,6 +561,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (cloudOpname.length > 0) setStockOpnames(deduplicateById(cloudOpname));
           if (cloudMutasi.length > 0) setMutasis(deduplicateById(cloudMutasi));
           if (cloudKartuStock.length > 0) setKartuStocks(deduplicateById(cloudKartuStock));
+          if (cloudForkliftActivities.length > 0) setForkliftActivities(deduplicateById(cloudForkliftActivities));
           if (cloudCategories.length > 0) setCategories(deduplicateById(cloudCategories));
           if (cloudUnits.length > 0) setUnits(deduplicateById(cloudUnits));
           if (cloudZones.length > 0) setZones(deduplicateById(cloudZones));
@@ -514,6 +632,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           { name: 'categories', setter: setCategories },
           { name: 'units', setter: setUnits },
           { name: 'zones', setter: setZones },
+          { name: 'driverQueues', setter: setDriverQueues },
         ];
 
         collectionsToListen.forEach(({ name, setter }) => {
@@ -604,7 +723,14 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_currentUser`, JSON.stringify(currentUser));
-  }, [currentUser]);
+    if (isLoggedIn && currentUser) {
+      if (currentUser.role === 'Security' && activeMenu !== 'incoming') {
+        setActiveMenu('incoming');
+      } else if (currentUser.role === 'Forklift' && activeMenu !== 'forklift_activity') {
+        setActiveMenu('forklift_activity');
+      }
+    }
+  }, [currentUser, isLoggedIn, activeMenu]);
 
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_isLoggedIn`, String(isLoggedIn));
@@ -651,13 +777,15 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_opname`, JSON.stringify(stockOpnames));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_mutasi`, JSON.stringify(mutasis));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_kartu_stock`, JSON.stringify(kartuStocks));
+    localStorage.setItem(`${LOCAL_STORAGE_KEY}_forklift_activities`, JSON.stringify(forkliftActivities));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_role_permissions`, JSON.stringify(rolePermissions));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_admin_authorities`, JSON.stringify(adminAuthorities));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_menu_configs`, JSON.stringify(menuConfigs));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_categories`, JSON.stringify(categories));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_units`, JSON.stringify(units));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_zones`, JSON.stringify(zones));
-  }, [users, materials, gedungList, vendors, incomingHeaders, rejects, putAways, outboundHeaders, stockOpnames, mutasis, kartuStocks, rolePermissions, adminAuthorities, menuConfigs, categories, units, zones]);
+    localStorage.setItem(`${LOCAL_STORAGE_KEY}_driver_queues`, JSON.stringify(driverQueues));
+  }, [users, materials, gedungList, vendors, incomingHeaders, rejects, putAways, outboundHeaders, stockOpnames, mutasis, kartuStocks, forkliftActivities, rolePermissions, adminAuthorities, menuConfigs, categories, units, zones, driverQueues]);
 
   // Sync to Firestore on changes
   useEffect(() => {
@@ -788,6 +916,15 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
+    const currentStr = JSON.stringify(driverQueues);
+    const oldStr = lastCloudStrings.current['driverQueues'] || '[]';
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['driverQueues'] = currentStr;
+    syncCollectionIncrementally('driverQueues', driverQueues, oldStr);
+  }, [driverQueues, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
     const currentStr = JSON.stringify(rolePermissions);
     if (currentStr === lastCloudStrings.current['rolePermissions']) return;
     lastCloudStrings.current['rolePermissions'] = currentStr;
@@ -862,10 +999,13 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const checkPermission = (menu: string): boolean => {
     const role = currentUser.role;
     const menuKey = menu as MenuKey;
-    if (rolePermissions[menuKey]) {
+    if (rolePermissions[menuKey] && rolePermissions[menuKey][role] !== undefined) {
       return rolePermissions[menuKey][role];
     }
     if (role === 'Admin') return true;
+    if (role === 'Security') {
+      return menu === 'incoming';
+    }
     if (role === 'Checker') {
       return ['dashboard', 'incoming', 'monitoring_reject', 'outbound', 'outbound_manual', 'kartu_stock', 'stock_opname', 'laporan'].includes(menu);
     }
@@ -1005,6 +1145,59 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setMaterials(prev => prev.filter(item => item.id !== id));
     await deleteFromFirestore('materials', id);
     showNotification('Data Material Dihapus', `Material ID ${id} telah dihapus dari sistem.`, 'info', 'Master Data Barang');
+  };
+
+  const registerDriverQueue = async (driver: { platNomor: string; namaSupir: string; namaVendor: string; noPoSJ: string; aktivitas?: 'Bongkar' | 'Muat' }) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todaysQueues = driverQueues.filter(q => q.tanggalDaftar.startsWith(todayStr));
+    
+    const maxIndex = todaysQueues.reduce((max, q) => {
+      const match = q.noAntrian.match(/^Q-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        return num > max ? num : max;
+      }
+      return max;
+    }, 0);
+
+    const nextQueueNum = `Q-${String(maxIndex + 1).padStart(3, '0')}`;
+    const id = `dq_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const newQueueItem: DriverQueueItem = {
+      id,
+      noAntrian: nextQueueNum,
+      platNomor: driver.platNomor.toUpperCase(),
+      namaSupir: driver.namaSupir,
+      namaVendor: driver.namaVendor,
+      noPoSJ: driver.noPoSJ,
+      status: 'Menunggu',
+      tanggalDaftar: new Date().toISOString(),
+      waktuStatus: new Date().toISOString(),
+      aktivitas: driver.aktivitas || 'Bongkar'
+    };
+
+    setDriverQueues(prev => [newQueueItem, ...prev]);
+    showNotification('Pendaftaran Driver Berhasil', `Nomor Antrian: ${nextQueueNum}. Silakan menunggu panggilan petugas.`, 'success', 'Antrian Gate & Docking');
+    return nextQueueNum;
+  };
+
+  const updateDriverQueueStatus = async (id: string, status: DriverQueueItem['status']) => {
+    setDriverQueues(prev => prev.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          status,
+          waktuStatus: new Date().toISOString()
+        };
+      }
+      return item;
+    }));
+    showNotification('Status Antrian Diperbarui', `Antrian telah diubah statusnya menjadi ${status}.`, 'info', 'Antrian Gate & Docking');
+  };
+
+  const deleteDriverQueue = async (id: string) => {
+    setDriverQueues(prev => prev.filter(item => item.id !== id));
+    await deleteFromFirestore('driverQueues', id);
+    showNotification('Antrian Dihapus', `Antrian telah berhasil dihapus dari sistem.`, 'info', 'Antrian Gate & Docking');
   };
 
   const addIncoming = (headerData: Omit<IncomingHeader, 'id' | 'noReceiving'>) => {
@@ -1520,6 +1713,29 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Mutasi Lokasi Berhasil', `Perpindahan barang ${m.materialId} dari ${m.dari} ke ${m.ke} berhasil dicatat.`, 'success', 'Mutasi Lokasi');
   };
 
+  const addForkliftActivity = (act: Omit<ForkliftActivity, 'id' | 'tanggal'>) => {
+    const newAct: ForkliftActivity = {
+      ...act,
+      id: `FLA-${Date.now()}`,
+      tanggal: new Date().toISOString()
+    };
+    setForkliftActivities(prev => [newAct, ...prev]);
+    addAuditLog('CREATE', 'Forklift & Handling', newAct.id, `Menambahkan aktivitas forklift operator ${newAct.operatorName} (${newAct.jenisAktivitas})`);
+    showNotification('Aktivitas Forklift Disimpan', `Aktivitas operator ${newAct.operatorName} berhasil dicatat.`, 'success', 'Forklift & Handling');
+  };
+
+  const updateForkliftActivity = (id: string, actData: Partial<ForkliftActivity>) => {
+    setForkliftActivities(prev => prev.map(item => item.id === id ? { ...item, ...actData } : item));
+    addAuditLog('UPDATE', 'Forklift & Handling', id, `Memperbarui aktivitas forklift #${id}`);
+    showNotification('Aktivitas Diperbarui', `Data aktivitas #${id} berhasil diperbarui.`, 'success', 'Forklift & Handling');
+  };
+
+  const deleteForkliftActivity = async (id: string) => {
+    setForkliftActivities(prev => prev.filter(item => item.id !== id));
+    addAuditLog('DELETE', 'Forklift & Handling', id, `Menghapus aktivitas forklift #${id}`);
+    showNotification('Aktivitas Dihapus', `Data aktivitas #${id} berhasil dihapus.`, 'info', 'Forklift & Handling');
+  };
+
   const addUser = (u: Omit<User, 'id'>) => {
     // Validasi duplikasi username
     const usernameExists = users.some(user => user.username.trim().toLowerCase() === u.username.trim().toLowerCase());
@@ -1974,11 +2190,14 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       stockOpnames,
       mutasis,
       kartuStocks,
+      forkliftActivities,
       gedungList,
       vendors,
       categories,
       units,
       zones,
+      forkliftUnits,
+      forkliftActivityTypes,
       rolePermissions,
       adminAuthorities,
       menuConfigs,
@@ -2003,6 +2222,9 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addStockOpname,
       approveStockOpnameAdjustment,
       addMutasi,
+      addForkliftActivity,
+      updateForkliftActivity,
+      deleteForkliftActivity,
       addUser,
       deleteUser,
       addVendor,
@@ -2019,6 +2241,12 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addZone,
       updateZone,
       deleteZone,
+      addForkliftUnit,
+      updateForkliftUnit,
+      deleteForkliftUnit,
+      addForkliftActivityType,
+      updateForkliftActivityType,
+      deleteForkliftActivityType,
       deleteIncoming,
       deleteOutbound,
       deleteReject,
@@ -2033,7 +2261,17 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       quickUpdateMaterialLocations,
       firebaseSyncStatus,
       theme,
-      toggleTheme
+      toggleTheme,
+      driverQueues,
+      activeAutofillDriver,
+      setActiveAutofillDriver,
+      activeMenu,
+      setActiveMenu,
+      registerDriverQueue,
+      updateDriverQueueStatus,
+      deleteDriverQueue,
+      auditLogs,
+      addAuditLog
     }}>
       {children}
     </WmsContext.Provider>

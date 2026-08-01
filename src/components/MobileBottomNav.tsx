@@ -1,6 +1,7 @@
 import React from 'react';
 import { LayoutDashboard, ArrowDownLeft, ArrowUpRight, ClipboardCheck, MapPin } from 'lucide-react';
 import { MenuKey } from '../types';
+import { useWms } from '../context/WmsContext';
 
 interface MobileBottomNavProps {
   activeMenu: MenuKey;
@@ -11,6 +12,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeMenu,
   onSelectMenu
 }) => {
+  const { currentUser } = useWms();
+
+  if (currentUser?.role === 'Security' || currentUser?.role === 'Forklift') {
+    return null;
+  }
+
   const items = [
     { key: 'dashboard' as MenuKey, label: 'Dashboard', icon: LayoutDashboard },
     { key: 'incoming' as MenuKey, label: 'Incoming', icon: ArrowDownLeft },

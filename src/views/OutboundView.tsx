@@ -89,7 +89,7 @@ const MaterialSearchSelect: React.FC<MaterialSearchSelectProps> = ({
 };
 
 export const OutboundView: React.FC = () => {
-  const { outboundHeaders, materials, currentUser, addOutbound, updateOutbound, deleteOutbound, gedungList, showNotification, getMaterialStockByGedung, appLogoUrl } = useWms();
+  const { outboundHeaders, materials, currentUser, addOutbound, updateOutbound, deleteOutbound, gedungList, showNotification, getMaterialStockByGedung, appLogoUrl, users } = useWms();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -112,6 +112,8 @@ export const OutboundView: React.FC = () => {
   const [ekspedisi, setEkspedisi] = useState('');
   const [palletOutCount, setPalletOutCount] = useState<number>(8);
   const [noKendaraan, setNoKendaraan] = useState('');
+  const [operatorForklift, setOperatorForklift] = useState('');
+  const [isManualOperator, setIsManualOperator] = useState(false);
 
   const [details, setDetails] = useState<Omit<OutboundDetail, 'id'>[]>(() => {
     const mat = materials[0];
@@ -149,6 +151,8 @@ export const OutboundView: React.FC = () => {
     setEkspedisi('');
     setNoKendaraan('');
     setPalletOutCount(8);
+    setOperatorForklift('');
+    setIsManualOperator(false);
     const mat = materials[0];
     if (mat) {
       const bStocks = getMaterialStockByGedung(mat.id);
@@ -179,6 +183,12 @@ export const OutboundView: React.FC = () => {
     setEkspedisi(header.ekspedisi);
     setNoKendaraan(header.noKendaraan || '');
     setPalletOutCount(header.palletOutCount);
+
+    const op = header.operatorForklift || '';
+    setOperatorForklift(op);
+    const opExists = users.some(u => u.nama === op && u.status === 'Aktif');
+    setIsManualOperator(op !== '' && !opExists);
+
     setDetails(header.details.map(d => ({
       materialId: d.materialId,
       namaBarang: d.namaBarang,
@@ -289,7 +299,8 @@ export const OutboundView: React.FC = () => {
       ekspedisi,
       noKendaraan,
       palletOutCount: parseVal(palletOutCount),
-      details: parsedDetails
+      details: parsedDetails,
+      operatorForklift: operatorForklift.trim() || undefined
     };
 
     if (editingId) {
@@ -434,6 +445,7 @@ export const OutboundView: React.FC = () => {
                 <th className="p-3.5">Ekspedisi</th>
                 <th className="p-3.5">No. Kendaraan</th>
                 <th className="p-3.5">PIC Checker</th>
+                <th className="p-3.5">Operator Forklift</th>
                 <th className="p-3.5 text-center">Print</th>
                 <th className="p-3.5">Keterangan</th>
               </tr>
@@ -645,6 +657,54 @@ export const OutboundView: React.FC = () => {
                     onChange={e => setNoKendaraan(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Operator Forklift</label>
+                  <div className="flex gap-2">
+                    {!isManualOperator ? (
+                      <select
+                        value={operatorForklift}
+                        onChange={e => {
+                          if (e.target.value === '__manual__') {
+                            setIsManualOperator(true);
+                            setOperatorForklift('');
+                          } else {
+                            setOperatorForklift(e.target.value);
+                          }
+                        }}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+                      >
+                        <option value="">-- Pilih Operator --</option>
+                        {users.filter(u => u.status === 'Aktif').map(u => (
+                          <option key={u.id} value={u.nama}>{u.nama} ({u.role})</option>
+                        ))}
+                        <option value="__manual__">✏️ Input Manual...</option>
+                      </select>
+                    ) : (
+                      <div className="flex gap-1 w-full">
+                        <input
+                          type="text"
+                          required
+                          value={operatorForklift}
+                          onChange={e => setOperatorForklift(e.target.value)}
+                          placeholder="Nama operator..."
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsManualOperator(false);
+                            setOperatorForklift('');
+                          }}
+                          className="px-2 py-1 bg-slate-150 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-bold"
+                          title="Pilih dari daftar user"
+                        >
+                          Daftar
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

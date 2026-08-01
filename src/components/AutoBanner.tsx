@@ -160,17 +160,19 @@ export const AutoBanner: React.FC = () => {
             </div>
 
             {/* Edit Button */}
-            <button
-              onClick={() => {
-                setTempText(autoBannerText);
-                setIsEditing(true);
-              }}
-              title="Ubah teks pengumuman banner"
-              className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-slate-200 text-[11px] font-semibold rounded-lg border border-white/15 transition-all shrink-0 flex items-center space-x-1 cursor-pointer z-10 shadow-sm"
-            >
-              <Edit3 className="w-3 h-3 text-indigo-300" />
-              <span className="hidden sm:inline">Ubah Text</span>
-            </button>
+            {currentUser?.role === 'Admin' && (
+              <button
+                onClick={() => {
+                  setTempText(autoBannerText);
+                  setIsEditing(true);
+                }}
+                title="Ubah teks pengumuman banner"
+                className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-slate-200 text-[11px] font-semibold rounded-lg border border-white/15 transition-all shrink-0 flex items-center space-x-1 cursor-pointer z-10 shadow-sm"
+              >
+                <Edit3 className="w-3 h-3 text-indigo-300" />
+                <span className="hidden sm:inline">Ubah Text</span>
+              </button>
+            )}
           </div>
         )}
 

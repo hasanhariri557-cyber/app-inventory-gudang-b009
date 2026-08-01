@@ -17,7 +17,9 @@ import {
 } from '../types';
 
 export const INITIAL_USERS: User[] = [
-  { id: 'USR-1', username: 'admin', nama: 'Admin', role: 'Admin', password: 'admin', status: 'Aktif' }
+  { id: 'USR-1', username: 'admin', nama: 'Admin', role: 'Admin', password: 'admin', status: 'Aktif' },
+  { id: 'USR-2', username: 'security', nama: 'Security Officer', role: 'Security', password: '123456', status: 'Aktif' },
+  { id: 'USR-3', username: 'forklift', nama: 'Operator Forklift', role: 'Forklift', password: '123456', status: 'Aktif' }
 ];
 
 export const INITIAL_GEDUNG: Gedung[] = [
@@ -182,6 +184,17 @@ export const INITIAL_ZONES: MasterSettingItem[] = [
   { id: 'ZON-5', nama: 'Zona Packaging & Kemasan', kode: 'Z-PK' },
 ];
 
+export const INITIAL_FORKLIFT_UNITS: MasterSettingItem[] = [
+  { id: 'FU-01', nama: 'Forklift-01 (Reach Truck)' },
+  { id: 'FU-02', nama: 'Forklift-02 (Counterbalance)' }
+];
+
+export const INITIAL_FORKLIFT_ACTIVITY_TYPES: MasterSettingItem[] = [
+  { id: 'FAT-01', nama: 'Put Away' },
+  { id: 'FAT-02', nama: 'Bongkar (Unloading)' },
+  { id: 'FAT-03', nama: 'Muat (Loading)' }
+];
+
 const today = new Date().toISOString().split('T')[0];
 
 export const INITIAL_INCOMING: IncomingHeader[] = [];
@@ -198,17 +211,20 @@ export const INITIAL_STOCK_OPNAME: StockOpnameItem[] = [];
 
 export const INITIAL_KARTU_STOCK: KartuStockEntry[] = [];
 
+export const INITIAL_FORKLIFT_ACTIVITIES: any[] = [];
+
 export const INITIAL_ROLE_PERMISSIONS: RolePermissions = {
-  dashboard: { Admin: true, Checker: true, Stoker: true },
-  master_data: { Admin: true, Checker: false, Stoker: false },
-  incoming: { Admin: true, Checker: true, Stoker: false },
-  warehouse_layout: { Admin: true, Checker: false, Stoker: true },
-  outbound: { Admin: true, Checker: true, Stoker: false },
-  outbound_manual: { Admin: true, Checker: true, Stoker: false },
-  stock_opname: { Admin: true, Checker: true, Stoker: true },
-  kartu_stock: { Admin: true, Checker: true, Stoker: true },
-  laporan: { Admin: true, Checker: true, Stoker: false },
-  setting: { Admin: true, Checker: false, Stoker: false }
+  dashboard: { Admin: true, Checker: true, Stoker: true, Security: false, Forklift: false },
+  master_data: { Admin: true, Checker: false, Stoker: false, Security: false, Forklift: false },
+  incoming: { Admin: true, Checker: true, Stoker: false, Security: true, Forklift: false },
+  warehouse_layout: { Admin: true, Checker: false, Stoker: true, Security: false, Forklift: true },
+  outbound: { Admin: true, Checker: true, Stoker: false, Security: false, Forklift: false },
+  outbound_manual: { Admin: true, Checker: true, Stoker: false, Security: false, Forklift: false },
+  stock_opname: { Admin: true, Checker: true, Stoker: true, Security: false, Forklift: false },
+  kartu_stock: { Admin: true, Checker: true, Stoker: true, Security: false, Forklift: false },
+  laporan: { Admin: true, Checker: true, Stoker: false, Security: false, Forklift: false },
+  forklift_activity: { Admin: true, Checker: true, Stoker: true, Security: false, Forklift: true },
+  setting: { Admin: true, Checker: false, Stoker: false, Security: false, Forklift: false }
 };
 
 export const INITIAL_ADMIN_AUTHORITIES: AdminAuthorities = {
@@ -260,6 +276,10 @@ export const INITIAL_MENU_CONFIGS: MenuConfigSettings = {
     companyNameHeader: 'PT LOGISTIK GUDANG TERINTEGRASI TBD',
     defaultReportFormat: 'BOTH',
     enableWatermark: true
+  },
+  forkliftActivity: {
+    defaultOperator: 'Admin',
+    showDetailedLogs: true
   },
   setting: {
     adminOnlyStrictAccess: true,

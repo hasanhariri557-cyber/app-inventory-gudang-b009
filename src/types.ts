@@ -1,4 +1,4 @@
-export type UserRole = 'Admin' | 'Checker' | 'Stoker';
+export type UserRole = 'Admin' | 'Checker' | 'Stoker' | 'Security' | 'Forklift';
 
 export interface User {
   id: string;
@@ -46,6 +46,7 @@ export interface IncomingHeader {
   platKendaraan: string;
   palletInCount: number;
   details: IncomingDetail[];
+  operatorForklift?: string;
 }
 
 export interface RejectIncoming {
@@ -94,6 +95,7 @@ export interface OutboundHeader {
   noKendaraan?: string;
   details: OutboundDetail[];
   isManual?: boolean;
+  operatorForklift?: string;
 }
 
 export interface StockOpnameItem {
@@ -119,6 +121,7 @@ export interface MutasiBarang {
   qty: number;
   pic: string;
   catatan?: string;
+  operatorForklift?: string;
 }
 
 export interface KartuStockEntry {
@@ -157,6 +160,23 @@ export interface MasterSettingItem {
   kode?: string;
 }
 
+export interface ForkliftActivity {
+  id: string;
+  tanggal: string;
+  operatorName: string;
+  forkliftUnit: string;
+  jenisAktivitas: 'Put Away' | 'Bongkar (Unloading)' | 'Muat (Loading)' | 'Mutasi Rak' | 'Stock Opname Support' | 'Lainnya';
+  materialId?: string;
+  namaBarang?: string;
+  qty: number;
+  jumlahPallet: number;
+  lokasiAsal?: string;
+  lokasiTujuan?: string;
+  status: 'Pending' | 'Proses' | 'Selesai';
+  catatan?: string;
+  pic: string;
+}
+
 export type MenuKey = 
   | 'dashboard'
   | 'master_data'
@@ -167,9 +187,10 @@ export type MenuKey =
   | 'stock_opname'
   | 'kartu_stock'
   | 'laporan'
+  | 'forklift_activity'
   | 'setting';
 
-export type RolePermissions = Record<MenuKey, { Admin: boolean; Checker: boolean; Stoker: boolean }>;
+export type RolePermissions = Record<MenuKey, { Admin: boolean; Checker: boolean; Stoker: boolean; Security: boolean; Forklift: boolean }>;
 
 export interface AdminAuthorities {
   approveStockOpnameAdjustment: boolean;
@@ -193,5 +214,33 @@ export interface MenuConfigSettings {
   outbound: { strictFifoFefoPolicy: boolean; requireDriverPlateCheck: boolean };
   kartuStock: { defaultLedgerSort: 'ASC' | 'DESC'; autoReconcileOnDiscrepancy: boolean };
   laporan: { companyNameHeader: string; defaultReportFormat: 'PDF' | 'EXCEL' | 'BOTH'; enableWatermark: boolean };
+  forkliftActivity: { defaultOperator: string; showDetailedLogs: boolean };
   setting: { adminOnlyStrictAccess: boolean; allowRoleSwitchingInHeader: boolean };
 }
+
+export interface DriverQueueItem {
+  id: string;
+  noAntrian: string;
+  platNomor: string;
+  namaSupir: string;
+  namaVendor: string;
+  noPoSJ: string;
+  status: 'Menunggu' | 'Dipanggil' | 'Bongkar Muat' | 'Selesai';
+  tanggalDaftar: string;
+  waktuStatus: string;
+  aktivitas?: 'Bongkar' | 'Muat';
+}
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'SYSTEM' | 'EXPORT';
+  module: string;
+  targetName: string;
+  details: string;
+}
+
+

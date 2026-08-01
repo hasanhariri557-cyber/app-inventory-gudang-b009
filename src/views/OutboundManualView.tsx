@@ -5,7 +5,7 @@ import { OutboundDetail, OutboundHeader } from '../types';
 import { exportToExcel, generateSuratJalanPDF } from '../utils/exportUtils';
 
 export const OutboundManualView: React.FC = () => {
-  const { outboundHeaders, materials, currentUser, addOutbound, showNotification, gedungList, getMaterialStockByGedung, appLogoUrl } = useWms();
+  const { outboundHeaders, materials, currentUser, addOutbound, showNotification, gedungList, getMaterialStockByGedung, appLogoUrl, users } = useWms();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -27,6 +27,8 @@ export const OutboundManualView: React.FC = () => {
   const [tanggal, setTanggal] = useState(today);
   const [ekspedisi, setEkspedisi] = useState('');
   const [noKendaraan, setNoKendaraan] = useState('');
+  const [operatorForklift, setOperatorForklift] = useState('');
+  const [isManualOperator, setIsManualOperator] = useState(false);
 
   const [details, setDetails] = useState<Omit<OutboundDetail, 'id'>[]>(() => {
     return [
@@ -130,7 +132,8 @@ export const OutboundManualView: React.FC = () => {
       palletOutCount: 0,
       isManual: true,
       details: parsedDetails,
-      id: `OUT-MAN-${Date.now()}`
+      id: `OUT-MAN-${Date.now()}`,
+      operatorForklift: operatorForklift.trim() || undefined
     };
 
     addOutbound(payload);
@@ -213,6 +216,8 @@ export const OutboundManualView: React.FC = () => {
           <button
             onClick={() => {
               setNomorDOSJ(`SJM-${Date.now().toString().slice(-6)}`);
+              setOperatorForklift('');
+              setIsManualOperator(false);
               setIsFormOpen(true);
             }}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center space-x-1.5 transition-all animate-pulse-subtle"
@@ -441,6 +446,54 @@ export const OutboundManualView: React.FC = () => {
                     onChange={e => setNoKendaraan(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono font-medium"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Operator Forklift</label>
+                  <div className="flex gap-2">
+                    {!isManualOperator ? (
+                      <select
+                        value={operatorForklift}
+                        onChange={e => {
+                          if (e.target.value === '__manual__') {
+                            setIsManualOperator(true);
+                            setOperatorForklift('');
+                          } else {
+                            setOperatorForklift(e.target.value);
+                          }
+                        }}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+                      >
+                        <option value="">-- Pilih Operator --</option>
+                        {users.filter(u => u.status === 'Aktif').map(u => (
+                          <option key={u.id} value={u.nama}>{u.nama} ({u.role})</option>
+                        ))}
+                        <option value="__manual__">✏️ Input Manual...</option>
+                      </select>
+                    ) : (
+                      <div className="flex gap-1 w-full">
+                        <input
+                          type="text"
+                          required
+                          value={operatorForklift}
+                          onChange={e => setOperatorForklift(e.target.value)}
+                          placeholder="Nama operator..."
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsManualOperator(false);
+                            setOperatorForklift('');
+                          }}
+                          className="px-2 py-1 bg-slate-150 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-bold"
+                          title="Pilih dari daftar user"
+                        >
+                          Daftar
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

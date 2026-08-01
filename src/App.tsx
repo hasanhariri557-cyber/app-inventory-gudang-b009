@@ -22,6 +22,8 @@ import { StockOpnameView } from './views/StockOpnameView';
 import { KartuStockView } from './views/KartuStockView';
 import { LaporanView } from './views/LaporanView';
 import { SettingView } from './views/SettingView';
+import { ForkliftActivityView } from './views/ForkliftActivityView';
+import { DriverCheckinView } from './views/DriverCheckinView';
 import { Lock } from 'lucide-react';
 
 const MENU_TITLES: Record<MenuKey, string> = {
@@ -29,6 +31,7 @@ const MENU_TITLES: Record<MenuKey, string> = {
   master_data: '2. Master Data Barang',
   incoming: '3. Incoming Barang (Receiving)',
   warehouse_layout: '4. Warehouse Layout (Denah)',
+  forklift_activity: '4c. Aktivitas Operator Forklift',
   outbound: '5a. Outbound Delivery',
   outbound_manual: '5b. Surat Jalan Manual',
   stock_opname: '6. Stock Opname Harian',
@@ -38,16 +41,36 @@ const MENU_TITLES: Record<MenuKey, string> = {
 };
 
 function MainApp() {
-  const { checkPermission, currentUser, isLoggedIn, setIsLoggedIn, showNotification } = useWms();
-  const [activeMenu, setActiveMenu] = useState<MenuKey>('dashboard');
+  const { checkPermission, currentUser, isLoggedIn, setIsLoggedIn, showNotification, activeMenu, setActiveMenu } = useWms();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
+  // Public route for driver pendaftaran & antrian check-in
+  const [isDriverCheckinRoute, setIsDriverCheckinRoute] = useState(() => {
+    const path = window.location.pathname;
+    const hash = window.location.hash;
+    return path === '/driver-checkin' || hash === '#/driver-checkin' || hash.includes('driver-checkin');
+  });
+
+  useEffect(() => {
+    const checkRoute = () => {
+      const path = window.location.pathname;
+      const hash = window.location.hash;
+      setIsDriverCheckinRoute(path === '/driver-checkin' || hash === '#/driver-checkin' || hash.includes('driver-checkin'));
+    };
+    window.addEventListener('popstate', checkRoute);
+    window.addEventListener('hashchange', checkRoute);
+    return () => {
+      window.removeEventListener('popstate', checkRoute);
+      window.removeEventListener('hashchange', checkRoute);
+    };
+  }, []);
+
   // Modals
   const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
 
   // Auto logout after 5 minutes of inactivity
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || isDriverCheckinRoute) return;
 
     let timeoutId: NodeJS.Timeout;
 
@@ -80,7 +103,16 @@ function MainApp() {
         window.removeEventListener(event, resetTimer);
       });
     };
-  }, [isLoggedIn, setIsLoggedIn, showNotification]);
+  }, [isLoggedIn, setIsLoggedIn, showNotification, isDriverCheckinRoute]);
+
+  if (isDriverCheckinRoute) {
+    return (
+      <>
+        <DriverCheckinView />
+        <NotificationModal />
+      </>
+    );
+  }
 
   if (!isLoggedIn) {
     return (
@@ -113,6 +145,7 @@ function MainApp() {
       case 'master_data': return <MasterDataView />;
       case 'incoming': return <IncomingView />;
       case 'warehouse_layout': return <WarehouseLayoutView />;
+      case 'forklift_activity': return <ForkliftActivityView />;
       case 'outbound': return <OutboundView />;
       case 'outbound_manual': return <OutboundManualView />;
       case 'stock_opname': return <StockOpnameView />;

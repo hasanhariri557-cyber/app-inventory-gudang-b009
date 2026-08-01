@@ -12,7 +12,8 @@ type ReportType =
   | 'pallet_out'
   | 'stock_opname'
   | 'vendor_mobil'
-  | 'kartu_stock';
+  | 'kartu_stock'
+  | 'forklift_work';
 
 interface LaporanViewProps {
   onOpenSpreadsheetModal?: () => void;
@@ -27,6 +28,9 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
     materials, 
     stockOpnames, 
     kartuStocks,
+    mutasis,
+    forkliftActivities,
+    users,
     closeNotification,
     deleteIncoming,
     deleteOutbound,
@@ -103,7 +107,8 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
     { key: 'pallet_out', label: '6. Laporan Pallet OUT' },
     { key: 'stock_opname', label: '7. Laporan Stock Opname' },
     { key: 'vendor_mobil', label: '8. Laporan Vendor Mobil Masuk' },
-    { key: 'kartu_stock', label: '9. Laporan Kartu Stock' }
+    { key: 'kartu_stock', label: '9. Laporan Kartu Stock' },
+    { key: 'forklift_work', label: '10. Report Hasil Kerja Forklift' }
   ];
 
   // Generate Report Table Data Based on Active Report
@@ -143,6 +148,105 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
             'PIC Checker': o.details.map(d => d.picChecker || '-').join('\n'),
             'Keterangan': o.details.map(d => d.keterangan || '-').join('\n')
           }));
+
+      case 'forklift_work': {
+        const filteredIncoming = incomingHeaders.filter(h => filterByDate(h.tanggal));
+        const filteredOutbound = outboundHeaders.filter(o => filterByDate(o.tanggal));
+        const filteredMutasi = mutasis.filter(m => filterByDate(m.tanggal));
+        const filteredForkliftActivities = forkliftActivities.filter(f => filterByDate(f.tanggal));
+
+        const operatorSet = new Set<string>();
+        users.forEach(u => {
+          if (u.role === 'Operator Forklift' || u.nama) {
+            operatorSet.add(u.nama);
+          }
+        });
+        filteredIncoming.forEach(h => { if (h.operatorForklift) operatorSet.add(h.operatorForklift); });
+        filteredOutbound.forEach(o => { if (o.operatorForklift) operatorSet.add(o.operatorForklift); });
+        filteredMutasi.forEach(m => { if (m.operatorForklift) operatorSet.add(m.operatorForklift); });
+        filteredForkliftActivities.forEach(f => { if (f.operatorName) operatorSet.add(f.operatorName); });
+
+        const resultMap: Record<string, {
+          incomingTx: number;
+          outboundTx: number;
+          mutasiTx: number;
+          forkliftActivitiesTx: number;
+          qtyIncoming: number;
+          qtyOutbound: number;
+          qtyMutasi: number;
+          qtyForkliftActivities: number;
+          palletIn: number;
+          palletOut: number;
+          palletMutasi: number;
+          palletForkliftActivities: number;
+        }> = {};
+
+        operatorSet.forEach(op => {
+          resultMap[op] = {
+            incomingTx: 0, outboundTx: 0, mutasiTx: 0, forkliftActivitiesTx: 0,
+            qtyIncoming: 0, qtyOutbound: 0, qtyMutasi: 0, qtyForkliftActivities: 0,
+            palletIn: 0, palletOut: 0, palletMutasi: 0, palletForkliftActivities: 0
+          };
+        });
+
+        filteredIncoming.forEach(h => {
+          const op = h.operatorForklift;
+          if (op && resultMap[op]) {
+            resultMap[op].incomingTx += 1;
+            resultMap[op].palletIn += (h.palletInCount || 0);
+            const sumQty = h.details.reduce((acc, d) => acc + (d.qtyDiterima || 0), 0);
+            resultMap[op].qtyIncoming += sumQty;
+          }
+        });
+
+        filteredOutbound.forEach(o => {
+          const op = o.operatorForklift;
+          if (op && resultMap[op]) {
+            resultMap[op].outboundTx += 1;
+            resultMap[op].palletOut += (o.palletOutCount || 0);
+            const sumQty = o.details.reduce((acc, d) => acc + (d.qty || 0), 0);
+            resultMap[op].qtyOutbound += sumQty;
+          }
+        });
+
+        filteredMutasi.forEach(m => {
+          const op = m.operatorForklift;
+          if (op && resultMap[op]) {
+            resultMap[op].mutasiTx += 1;
+            resultMap[op].palletMutasi += 1;
+            resultMap[op].qtyMutasi += (m.qty || 0);
+          }
+        });
+
+        filteredForkliftActivities.forEach(f => {
+          const op = f.operatorName;
+          if (op && resultMap[op]) {
+            resultMap[op].forkliftActivitiesTx += 1;
+            resultMap[op].qtyForkliftActivities += (f.qty || 0);
+            resultMap[op].palletForkliftActivities += (f.jumlahPallet || 0);
+          }
+        });
+
+        return Object.entries(resultMap).map(([nama, data]) => {
+          const totalTx = data.incomingTx + data.outboundTx + data.mutasiTx + data.forkliftActivitiesTx;
+          const totalQty = data.qtyIncoming + data.qtyOutbound + data.qtyMutasi + data.qtyForkliftActivities;
+          const totalPallet = data.palletIn + data.palletOut + data.palletMutasi + data.palletForkliftActivities;
+          return {
+            'Nama Operator': nama,
+            'Total Transaksi Handling': totalTx,
+            'Handling Incoming': data.incomingTx,
+            'Handling Outbound': data.outboundTx,
+            'Handling Mutasi': data.mutasiTx,
+            'Aktivitas Forklift': data.forkliftActivitiesTx,
+            'Total Qty Dipindahkan': totalQty.toLocaleString('id-ID'),
+            'Pallet IN': data.palletIn,
+            'Pallet OUT': data.palletOut,
+            'Pallet Mutasi': data.palletMutasi,
+            'Pallet Aktivitas': data.palletForkliftActivities,
+            'Total Pallet Ditangani': totalPallet
+          };
+        });
+      }
 
       case 'reject':
         return rejects

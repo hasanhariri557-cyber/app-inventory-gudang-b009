@@ -4,7 +4,8 @@ import {
   Users, 
   ShieldCheck, 
   Building2, 
-  MapPin, 
+  MapPin,
+  Truck, 
   Plus, 
   Check, 
   Lock, 
@@ -97,10 +98,28 @@ export const SettingView: React.FC = () => {
     putAways,
     stockOpnames,
     mutasis,
-    kartuStocks
+    kartuStocks,
+    forkliftActivities,
+    forkliftUnits,
+    forkliftActivityTypes,
+    auditLogs
   } = useWms();
 
-  const [activeTab, setActiveTab] = useState<'branding' | 'roles' | 'admin_authority' | 'menu_settings' | 'users' | 'vendors' | 'gedung' | 'master' | 'backup'>('branding');
+  const [activeTab, setActiveTab] = useState<'branding' | 'roles' | 'admin_authority' | 'menu_settings' | 'users' | 'vendors' | 'gedung' | 'master' | 'forklift' | 'backup' | 'audit_log'>('branding');
+
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditActionFilter, setAuditActionFilter] = useState('ALL');
+  const [auditModuleFilter, setAuditModuleFilter] = useState('ALL');
+
+  const filteredAuditLogs = (auditLogs || []).filter(l => {
+    const matchesSearch = 
+      l.userName.toLowerCase().includes(auditSearch.toLowerCase()) ||
+      l.targetName.toLowerCase().includes(auditSearch.toLowerCase()) ||
+      l.details.toLowerCase().includes(auditSearch.toLowerCase());
+    const matchesAction = auditActionFilter === 'ALL' || l.action === auditActionFilter;
+    const matchesModule = auditModuleFilter === 'ALL' || l.module === auditModuleFilter;
+    return matchesSearch && matchesAction && matchesModule;
+  });
 
   // Google Sheets Backup state variables
   const [isGsAuthenticated, setIsGsAuthenticated] = useState(false);
@@ -400,7 +419,14 @@ export const SettingView: React.FC = () => {
       ]);
       await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Kartu Stock', kartuStockHeaders, kartuStockRows);
 
-      setGsSuccess('Backup database ke Google Sheets Berhasil! Seluruh 11 tab master & transaksi telah berhasil disinkronkan.');
+      // 12. Sync Forklift Activities
+      const forkliftHeaders = ['ID', 'Tanggal', 'Operator', 'Unit', 'Jenis Aktivitas', 'Material', 'Qty', 'Pallet', 'Asal', 'Tujuan', 'Status', 'Catatan', 'PIC'];
+      const forkliftRows = forkliftActivities.map((f) => [
+        f.id, f.tanggal, f.operatorName, f.forkliftUnit, f.jenisAktivitas, f.namaBarang || '', f.qty, f.jumlahPallet, f.lokasiAsal || '', f.lokasiTujuan || '', f.status, f.catatan || '', f.pic
+      ]);
+      await updateSheetValuesWithAutoCreate(gsToken, selectedGsSpreadsheet.id, 'Forklift Activities', forkliftHeaders, forkliftRows);
+
+      setGsSuccess('Backup database ke Google Sheets Berhasil! Seluruh 12 tab master & transaksi telah berhasil disinkronkan.');
     } catch (err: any) {
       console.error(err);
       setGsError(err.message || 'Gagal menyelaraskan data ke Google Sheets.');
@@ -502,6 +528,14 @@ export const SettingView: React.FC = () => {
   const [zoneName, setZoneName] = useState('');
   const [zoneCode, setZoneCode] = useState('');
 
+  const [isAddForkliftUnitOpen, setIsAddForkliftUnitOpen] = useState(false);
+  const [editingForkliftUnit, setEditingForkliftUnit] = useState<MasterSettingItem | null>(null);
+  const [forkliftUnitName, setForkliftUnitName] = useState('');
+
+  const [isAddForkliftActivityOpen, setIsAddForkliftActivityOpen] = useState(false);
+  const [editingForkliftActivity, setEditingForkliftActivity] = useState<MasterSettingItem | null>(null);
+  const [forkliftActivityName, setForkliftActivityName] = useState('');
+
   // Inline Quick Add Zone in Gedung Form
   const [isAddingNewZone, setIsAddingNewZone] = useState(false);
   const [newZoneInput, setNewZoneInput] = useState('');
@@ -548,6 +582,32 @@ export const SettingView: React.FC = () => {
     setEditingZone(null);
     setZoneName('');
     setZoneCode('');
+  };
+
+  const handleSaveForkliftUnit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forkliftUnitName) return;
+    if (editingForkliftUnit) {
+      updateForkliftUnit(editingForkliftUnit.id, { nama: forkliftUnitName });
+    } else {
+      addForkliftUnit({ nama: forkliftUnitName });
+    }
+    setIsAddForkliftUnitOpen(false);
+    setEditingForkliftUnit(null);
+    setForkliftUnitName('');
+  };
+
+  const handleSaveForkliftActivity = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forkliftActivityName) return;
+    if (editingForkliftActivity) {
+      updateForkliftActivityType(editingForkliftActivity.id, { nama: forkliftActivityName });
+    } else {
+      addForkliftActivityType({ nama: forkliftActivityName });
+    }
+    setIsAddForkliftActivityOpen(false);
+    setEditingForkliftActivity(null);
+    setForkliftActivityName('');
   };
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [adminPinInput, setAdminPinInput] = useState('');
@@ -842,6 +902,7 @@ export const SettingView: React.FC = () => {
     { key: 'outbound', label: 'Outbound', icon: ArrowUpRight },
     { key: 'kartuStock', label: 'Kartu Stock', icon: CreditCard },
     { key: 'laporan', label: 'Laporan WMS', icon: FileText },
+    { key: 'forkliftActivity', label: 'Aktivitas Forklift', icon: Truck },
     { key: 'setting', label: 'Setting System', icon: Settings }
   ];
 
@@ -971,6 +1032,16 @@ export const SettingView: React.FC = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab('forklift')}
+          className={`px-3.5 py-2 text-xs font-semibold rounded-xl flex items-center space-x-2 transition-all whitespace-nowrap ${
+            activeTab === 'forklift' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <Truck className="w-4 h-4" />
+          <span>8b. Master Forklift</span>
+        </button>
+
+        <button
           disabled={currentUser.role !== 'Admin'}
           onClick={() => setActiveTab('backup')}
           className={`px-3.5 py-2 text-xs font-semibold rounded-xl flex items-center space-x-2 transition-all whitespace-nowrap ${
@@ -983,6 +1054,16 @@ export const SettingView: React.FC = () => {
           <FileSpreadsheet className="w-4 h-4" />
           <span>9. Backup & Cadangan Data</span>
           {currentUser.role !== 'Admin' && <Lock className="w-3 h-3 text-slate-400" />}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('audit_log')}
+          className={`px-3.5 py-2 text-xs font-semibold rounded-xl flex items-center space-x-2 transition-all whitespace-nowrap ${
+            activeTab === 'audit_log' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <ClipboardCheck className="w-4 h-4" />
+          <span>10. Audit Log Transaksi</span>
         </button>
       </div>
 
@@ -1480,7 +1561,57 @@ export const SettingView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: PENGATURAN SPESIFIK SEMUA MENU */}
+      {/* TAB 8B: MASTER FORKLIFT */}
+      {activeTab === 'forklift' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Forklift Units */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-sm font-bold text-slate-900">Unit Forklift</h3>
+              <button 
+                onClick={() => setIsAddForkliftUnitOpen(true)}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
+              >
+                + Tambah Unit
+              </button>
+            </div>
+            <div className="space-y-2">
+              {forkliftUnits.map(unit => (
+                <div key={unit.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <span className="text-xs font-semibold text-slate-700">{unit.nama}</span>
+                  <div className="flex items-center space-x-2">
+                    <button onClick={() => deleteForkliftUnit(unit.id)} className="text-rose-500 hover:text-rose-700"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Forklift Activity Types */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-sm font-bold text-slate-900">Jenis Aktivitas</h3>
+              <button 
+                onClick={() => setIsAddForkliftActivityOpen(true)}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
+              >
+                + Tambah Jenis
+              </button>
+            </div>
+            <div className="space-y-2">
+              {forkliftActivityTypes.map(act => (
+                <div key={act.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <span className="text-xs font-semibold text-slate-700">{act.nama}</span>
+                  <div className="flex items-center space-x-2">
+                    <button onClick={() => deleteForkliftActivityType(act.id)} className="text-rose-500 hover:text-rose-700"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'menu_settings' && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           
@@ -2020,6 +2151,7 @@ export const SettingView: React.FC = () => {
                       <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full border ${
                         u.role === 'Admin' ? 'bg-amber-100 text-amber-800 border-amber-300' :
                         u.role === 'Checker' ? 'bg-indigo-100 text-indigo-800 border-indigo-300' :
+                        u.role === 'Security' ? 'bg-slate-100 text-slate-800 border-slate-300' :
                         'bg-emerald-100 text-emerald-800 border-emerald-300'
                       }`}>
                         {u.role}
@@ -2718,6 +2850,8 @@ export const SettingView: React.FC = () => {
                   <option value="Admin">Admin (Otoritas Penuh)</option>
                   <option value="Checker">Checker (Incoming, Outbound, Stock Opname)</option>
                   <option value="Stoker">Stoker (Put Away, Layout, Mutasi)</option>
+                  <option value="Security">Security (Gate / Security Officer)</option>
+                  <option value="Forklift">Forklift (Aktivitas Forklift)</option>
                 </select>
               </div>
               <div className="pt-3 border-t border-slate-200 flex justify-end space-x-2">
@@ -3265,6 +3399,217 @@ export const SettingView: React.FC = () => {
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Ya, Hapus Zona</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ADD / EDIT FORKLIFT UNIT */}
+      {isAddForkliftUnitOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden text-slate-800">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="font-bold text-slate-900 text-sm">{editingForkliftUnit ? 'Edit Unit Forklift' : 'Tambah Unit Forklift Baru'}</h3>
+              <button onClick={() => setIsAddForkliftUnitOpen(false)} className="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+            </div>
+            <form onSubmit={handleSaveForkliftUnit} className="p-6 space-y-3">
+              <div>
+                <label className="block text-xs text-slate-700 font-semibold mb-1">Nama Unit *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Forklift-03"
+                  value={forkliftUnitName}
+                  onChange={e => setForkliftUnitName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="pt-3 border-t border-slate-200 flex justify-end space-x-2">
+                <button type="button" onClick={() => setIsAddForkliftUnitOpen(false)} className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-xl font-semibold">Batal</button>
+                <button type="submit" className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs">Simpan Unit</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ADD / EDIT FORKLIFT ACTIVITY */}
+      {isAddForkliftActivityOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden text-slate-800">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="font-bold text-slate-900 text-sm">{editingForkliftActivity ? 'Edit Jenis Aktivitas' : 'Tambah Jenis Aktivitas Baru'}</h3>
+              <button onClick={() => setIsAddForkliftActivityOpen(false)} className="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+            </div>
+            <form onSubmit={handleSaveForkliftActivity} className="p-6 space-y-3">
+              <div>
+                <label className="block text-xs text-slate-700 font-semibold mb-1">Nama Aktivitas *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Loading"
+                  value={forkliftActivityName}
+                  onChange={e => setForkliftActivityName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="pt-3 border-t border-slate-200 flex justify-end space-x-2">
+                <button type="button" onClick={() => setIsAddForkliftActivityOpen(false)} className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-xl font-semibold">Batal</button>
+                <button type="submit" className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs">Simpan Aktivitas</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 10: AUDIT LOG TRANSAKSI */}
+      {activeTab === 'audit_log' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
+          <div className="border-b border-slate-200 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <ClipboardCheck className="w-5 h-5" />
+                </div>
+                <span>Audit Log & Jejak Aktivitas Operasional Gudang</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Merekam otomatis setiap aktivitas dan perubahan data (Create, Update, Delete) oleh user demi transparansi dan audit trail gudang.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  const rows = (auditLogs || []).map(l => ({
+                    'Waktu': new Date(l.timestamp).toLocaleString('id-ID'),
+                    'User': l.userName,
+                    'Role': l.userRole,
+                    'Aksi': l.action,
+                    'Modul': l.module,
+                    'Target': l.targetName,
+                    'Detail Perubahan': l.details
+                  }));
+                  exportAllWmsToExcel([{ name: 'Audit Log', data: rows }]);
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Export Excel</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Cari Audit Log</label>
+              <input
+                type="text"
+                placeholder="Cari user, target, atau detail..."
+                value={auditSearch}
+                onChange={e => setAuditSearch(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Filter Aksi</label>
+              <select
+                value={auditActionFilter}
+                onChange={e => setAuditActionFilter(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+              >
+                <option value="ALL">Semua Aksi</option>
+                <option value="CREATE">CREATE</option>
+                <option value="UPDATE">UPDATE</option>
+                <option value="DELETE">DELETE</option>
+                <option value="LOGIN">LOGIN</option>
+                <option value="SYSTEM">SYSTEM</option>
+                <option value="EXPORT">EXPORT</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Filter Modul</label>
+              <select
+                value={auditModuleFilter}
+                onChange={e => setAuditModuleFilter(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+              >
+                <option value="ALL">Semua Modul</option>
+                <option value="Incoming">Incoming</option>
+                <option value="Outbound">Outbound</option>
+                <option value="Mutasi">Mutasi</option>
+                <option value="Master Data">Master Data</option>
+                <option value="Users">Users</option>
+                <option value="Vendors">Vendors</option>
+                <option value="Gedung">Gedung</option>
+                <option value="Setting">Setting</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+            <div className="overflow-x-auto max-h-[500px]">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="bg-slate-50 text-slate-700 font-bold sticky top-0 border-b border-slate-200 z-10">
+                  <tr>
+                    <th className="p-3.5">Waktu</th>
+                    <th className="p-3.5">User</th>
+                    <th className="p-3.5">Aksi</th>
+                    <th className="p-3.5">Modul</th>
+                    <th className="p-3.5">Target / No Dokumen</th>
+                    <th className="p-3.5">Detail Perubahan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredAuditLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                        Belum ada catatan audit log yang cocok dengan filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredAuditLogs.map(log => {
+                      const badgeColor = 
+                        log.action === 'CREATE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        log.action === 'UPDATE' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        log.action === 'DELETE' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                        'bg-amber-50 text-amber-700 border-amber-200';
+                      return (
+                        <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3.5 whitespace-nowrap font-mono text-slate-600">
+                            {new Date(log.timestamp).toLocaleString('id-ID', {
+                              dateStyle: 'medium',
+                              timeStyle: 'medium'
+                            })}
+                          </td>
+                          <td className="p-3.5 whitespace-nowrap">
+                            <div className="font-bold text-slate-800">{log.userName}</div>
+                            <div className="text-[10px] text-slate-500">{log.userRole}</div>
+                          </td>
+                          <td className="p-3.5 whitespace-nowrap">
+                            <span className={`px-2 py-0.5 border font-bold rounded text-[10px] ${badgeColor}`}>
+                              {log.action}
+                            </span>
+                          </td>
+                          <td className="p-3.5 whitespace-nowrap font-semibold text-slate-700">
+                            {log.module}
+                          </td>
+                          <td className="p-3.5 whitespace-nowrap font-mono font-medium text-slate-900">
+                            {log.targetName}
+                          </td>
+                          <td className="p-3.5 text-slate-700 max-w-xs truncate" title={log.details}>
+                            {log.details}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="p-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
+              <span>Menampilkan {filteredAuditLogs.length} dari {(auditLogs || []).length} total audit log</span>
             </div>
           </div>
         </div>

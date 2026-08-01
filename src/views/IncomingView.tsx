@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowDownLeft, Plus, Trash2, CheckCircle2, AlertTriangle, XCircle, Search, Layers, FileText, ChevronDown, Check, Pencil } from 'lucide-react';
+import { ArrowDownLeft, Plus, Trash2, CheckCircle2, AlertTriangle, XCircle, Search, Layers, FileText, ChevronDown, Check, Pencil, QrCode, Volume2, Play, CheckSquare, Clock, Truck } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
+import QRCode from 'qrcode';
 import { IncomingDetail, IncomingHeader, Material } from '../types';
 import { calculatePalletCount, getUppPalletForMaterial } from '../utils/palletUtils';
 
@@ -115,13 +116,89 @@ const MaterialSearchSelect: React.FC<MaterialSearchSelectProps> = ({ selectedId,
 };
 
 export const IncomingView: React.FC = () => {
-  const { incomingHeaders, materials, vendors, gedungList, addIncoming, updateIncoming, deleteIncoming } = useWms();
+  const { 
+    incomingHeaders, 
+    materials, 
+    vendors, 
+    gedungList, 
+    addIncoming, 
+    updateIncoming, 
+    deleteIncoming,
+    driverQueues,
+    updateDriverQueueStatus,
+    deleteDriverQueue,
+    activeAutofillDriver,
+    setActiveAutofillDriver,
+    currentUser,
+    users
+  } = useWms();
+
+  const [activeTab, setActiveTab] = useState<'receiving' | 'queue'>('receiving');
+  const [activityFilter, setActivityFilter] = useState<'Semua' | 'Bongkar' | 'Muat'>('Semua');
+
+  const currentTab = currentUser?.role === 'Security' ? 'queue' : activeTab;
+
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'Security') {
+      setActiveTab('queue');
+    }
+  }, [currentUser]);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+
+  const filteredQueues = driverQueues.filter((item) => {
+    if (activityFilter === 'Semua') return true;
+    const act = item.aktivitas || 'Bongkar';
+    return act === activityFilter;
+  });
+
+  useEffect(() => {
+    if (isQrModalOpen) {
+      const generateQr = async () => {
+        try {
+          const url = `${window.location.origin}/driver-checkin`;
+          const dataUrl = await QRCode.toDataURL(url, {
+            width: 320, // 320px x 320px for high visibility
+            margin: 4, // 4 modules padding = very clear quiet zone
+            errorCorrectionLevel: 'M', // Medium error correction for simple, easy-to-scan pattern
+            color: {
+              dark: '#000000', // pure black
+              light: '#ffffff' // pure white
+            }
+          });
+          setQrCodeDataUrl(dataUrl);
+        } catch (err) {
+          console.error('Failed to generate QR Code:', err);
+        }
+      };
+      generateQr();
+    }
+  }, [isQrModalOpen]);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showTodayOnly, setShowTodayOnly] = useState(true);
+
+  // Autofill form from driver check-in
+  useEffect(() => {
+    if (activeAutofillDriver) {
+      setVendor(activeAutofillDriver.namaVendor);
+      setNomorPO(activeAutofillDriver.noPoSJ);
+      setNoSuratJalan(activeAutofillDriver.noPoSJ);
+      setPlatKendaraan(activeAutofillDriver.platNomor);
+      
+      setIsFormOpen(true);
+      setEditingId(null);
+      
+      // Auto switch to receiving tab to view the opened form
+      setActiveTab('receiving');
+      
+      // Clear the autofill event
+      setActiveAutofillDriver(null);
+    }
+  }, [activeAutofillDriver, setActiveAutofillDriver]);
 
   // Timezone-safe local date YYYY-MM-DD
   const getLocalDateString = () => {
@@ -139,6 +216,8 @@ export const IncomingView: React.FC = () => {
   const [noSuratJalan, setNoSuratJalan] = useState('');
   const [platKendaraan, setPlatKendaraan] = useState('');
   const [palletInCount, setPalletInCount] = useState<number>(0);
+  const [operatorForklift, setOperatorForklift] = useState('');
+  const [isManualOperator, setIsManualOperator] = useState(false);
 
   // Details Form State
   const [details, setDetails] = useState<Omit<IncomingDetail, 'id'>[]>([
@@ -187,6 +266,8 @@ export const IncomingView: React.FC = () => {
     ];
     setDetails(initialDetails);
     setPalletInCount(0);
+    setOperatorForklift('');
+    setIsManualOperator(false);
     setIsFormOpen(true);
   };
 
@@ -198,6 +279,12 @@ export const IncomingView: React.FC = () => {
     setNoSuratJalan(header.noSuratJalan);
     setPlatKendaraan(header.platKendaraan);
     setPalletInCount(header.palletInCount);
+
+    const op = header.operatorForklift || '';
+    setOperatorForklift(op);
+    const opExists = users.some(u => u.nama === op && u.status === 'Aktif');
+    setIsManualOperator(op !== '' && !opExists);
+
     setDetails(header.details.map(d => ({
       materialId: d.materialId,
       namaBarang: d.namaBarang,
@@ -326,7 +413,8 @@ export const IncomingView: React.FC = () => {
       noSuratJalan,
       platKendaraan,
       palletInCount: parseVal(palletInCount),
-      details: parsedDetails
+      details: parsedDetails,
+      operatorForklift: operatorForklift.trim() || undefined
     };
 
     if (editingId) {
@@ -362,23 +450,73 @@ export const IncomingView: React.FC = () => {
             <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
               <ArrowDownLeft className="w-5 h-5" />
             </div>
-            <span>Incoming Barang (Receiving)</span>
+            <span>{currentUser?.role === 'Security' ? 'Gate & Antrian Supir' : 'Incoming Barang (Receiving)'}</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Penerimaan Inbound Dari Vendor, Proses Good Receive Sampai Alokasi Barang Ke Gedung Pnyimpanan.
+            {currentUser?.role === 'Security' 
+              ? 'Melihat daftar antrian truk, panggil supir, verifikasi Check-In / Check-Out, serta cetak/bagikan QR Code.' 
+              : 'Penerimaan Inbound Dari Vendor, Proses Good Receive Sampai Alokasi Barang Ke Gedung Penyimpanan.'}
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center space-x-1.5 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Input Barang Masuk</span>
-        </button>
+        {currentUser?.role !== 'Security' && (
+          <button
+            onClick={handleOpenCreate}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center space-x-1.5 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Input Barang Masuk</span>
+          </button>
+        )}
       </div>
 
-      {/* Filter Bar */}
+      {/* Tab Selector */}
+      {currentUser?.role !== 'Security' ? (
+        <div className="flex border-b border-slate-200 gap-6 text-xs font-bold text-slate-400">
+          <button
+            onClick={() => setActiveTab('receiving')}
+            className={`pb-2.5 border-b-2 transition-all cursor-pointer ${
+              currentTab === 'receiving'
+                ? 'border-emerald-600 text-emerald-600 font-extrabold'
+                : 'border-transparent hover:text-slate-550'
+            }`}
+          >
+            Riwayat Penerimaan (Good Receiving)
+          </button>
+          <button
+            onClick={() => setActiveTab('queue')}
+            className={`pb-2.5 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 relative ${
+              currentTab === 'queue'
+                ? 'border-emerald-600 text-emerald-600 font-extrabold'
+                : 'border-transparent hover:text-slate-550'
+            }`}
+          >
+            <span>Antrian Gate & Docking</span>
+            {driverQueues.filter(q => q.status !== 'Selesai').length > 0 && (
+              <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full min-w-4 h-4 flex items-center justify-center">
+                {driverQueues.filter(q => q.status !== 'Selesai').length}
+              </span>
+            )}
+          </button>
+        </div>
+      ) : (
+        <div className="border-b border-slate-200 pb-2 flex items-center justify-between">
+          <span className="text-xs font-extrabold text-emerald-600 uppercase tracking-wider border-b-2 border-emerald-600 pb-2">
+            Antrian Aktif Gate & Docking
+          </span>
+          <button
+            onClick={() => setIsQrModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl border border-indigo-200 text-xs font-bold transition-all cursor-pointer"
+          >
+            <QrCode className="w-4 h-4" />
+            <span>Bagikan QR Code Pendaftaran</span>
+          </button>
+        </div>
+      )}
+
+      {currentTab === 'receiving' ? (
+        <>
+          {/* Filter Bar */}
       <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="relative flex-1">
           <input
@@ -540,6 +678,222 @@ export const IncomingView: React.FC = () => {
           </table>
         </div>
       </div>
+    </>
+  ) : (
+    <>
+      {/* Driver Queue KPI Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
+            <Layers className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Total Antrean</span>
+            <span className="text-xl font-bold text-slate-900">{driverQueues.length}</span>
+          </div>
+        </div>
+        
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl shrink-0">
+            <Clock className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Menunggu</span>
+            <span className="text-xl font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Menunggu').length}</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+            <Volume2 className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Dipanggil ke Dock</span>
+            <span className="text-xl font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Dipanggil').length}</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+          <div className="p-3 bg-orange-50 text-orange-600 rounded-xl shrink-0">
+            <Truck className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Bongkar Muat</span>
+            <span className="text-xl font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Bongkar Muat').length}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Queue Control Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h3 className="font-bold text-slate-900 text-sm">Dashboard Logistik Yard & Docking</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Pantau, panggil, dan proses antrean pengemudi logistik di pos depan secara real-time.</p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
+          {/* Filter Aktivitas */}
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-[11px] font-semibold">
+            <button
+              onClick={() => setActivityFilter('Semua')}
+              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                activityFilter === 'Semua'
+                  ? 'bg-white text-slate-950 shadow-xs font-bold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Semua
+            </button>
+            <button
+              onClick={() => setActivityFilter('Bongkar')}
+              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                activityFilter === 'Bongkar'
+                  ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${activityFilter === 'Bongkar' ? 'bg-white' : 'bg-emerald-500'}`}></span>
+              Hanya Bongkar
+            </button>
+            <button
+              onClick={() => setActivityFilter('Muat')}
+              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                activityFilter === 'Muat'
+                  ? 'bg-purple-600 text-white shadow-xs font-bold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${activityFilter === 'Muat' ? 'bg-white' : 'bg-purple-500'}`}></span>
+              Hanya Muat
+            </button>
+          </div>
+
+          <button
+            onClick={() => setIsQrModalOpen(true)}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer shrink-0"
+          >
+            <QrCode className="w-4 h-4 text-indigo-400" />
+            Tampilkan QR Gate
+          </button>
+        </div>
+      </div>
+
+      {/* Queue Table */}
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+        <div className="overflow-x-auto max-h-[500px]">
+          <table className="w-full text-left text-xs text-slate-700">
+            <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
+              <tr>
+                <th className="p-3.5">No Antrian</th>
+                <th className="p-3.5">Waktu Terdaftar</th>
+                <th className="p-3.5">Plat Nomor</th>
+                <th className="p-3.5">Nama Supir</th>
+                <th className="p-3.5">Nama Vendor</th>
+                <th className="p-3.5">PO / Surat Jalan</th>
+                <th className="p-3.5">Aktivitas</th>
+                <th className="p-3.5">Status</th>
+                <th className="p-3.5 text-right">Aksi Otoritas</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredQueues.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
+                    <Truck className="w-10 h-10 mx-auto text-slate-300 mb-2 animate-bounce" />
+                    Belum ada antrean driver aktif terdaftar dengan kriteria ini.
+                  </td>
+                </tr>
+              ) : (
+                filteredQueues.map((item) => {
+                  const waitingMins = Math.round((Date.now() - new Date(item.tanggalDaftar).getTime()) / 60000);
+                  const waitingTimeText = waitingMins < 1 ? 'Baru saja' : `${waitingMins} mnt lalu`;
+                  const act = item.aktivitas || 'Bongkar';
+                  
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-3.5 font-extrabold text-slate-900 text-sm font-mono tracking-tight">{item.noAntrian}</td>
+                      <td className="p-3.5 text-slate-500 font-medium">
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{waitingTimeText}</span>
+                        </div>
+                      </td>
+                      <td className="p-3.5 font-bold uppercase text-slate-900">{item.platNomor}</td>
+                      <td className="p-3.5 font-semibold text-slate-800">{item.namaSupir}</td>
+                      <td className="p-3.5 text-slate-700 font-medium">{item.namaVendor}</td>
+                      <td className="p-3.5 text-slate-600 font-mono font-bold text-[11px]">{item.noPoSJ}</td>
+                      <td className="p-3.5">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                          act === 'Muat'
+                            ? 'bg-purple-50 text-purple-700 border-purple-200 shadow-2xs'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs'
+                        }`}>
+                          {act === 'Muat' ? 'MUAT' : 'BONGKAR'}
+                        </span>
+                      </td>
+                      <td className="p-3.5">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          item.status === 'Menunggu' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                          item.status === 'Dipanggil' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                          item.status === 'Bongkar Muat' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                          'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}>
+                          {item.status === 'Dipanggil' ? 'Dipanggil ke Dock' : item.status}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                        {item.status === 'Menunggu' && (
+                          <button
+                            onClick={() => updateDriverQueueStatus(item.id, 'Dipanggil')}
+                            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-all cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <Volume2 className="w-3 h-3" />
+                            Panggil
+                          </button>
+                        )}
+                        {item.status === 'Dipanggil' && (
+                          <button
+                            onClick={() => {
+                              updateDriverQueueStatus(item.id, 'Bongkar Muat');
+                              setActiveAutofillDriver(item);
+                            }}
+                            className="px-2.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-all cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <Play className="w-3 h-3" />
+                            Bongkar Muat
+                          </button>
+                        )}
+                        {item.status === 'Bongkar Muat' && (
+                          <button
+                            onClick={() => updateDriverQueueStatus(item.id, 'Selesai')}
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-all cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <CheckSquare className="w-3 h-3" />
+                            Selesai
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Hapus antrean pengemudi ini?')) {
+                              deleteDriverQueue(item.id);
+                            }
+                          }}
+                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 hover:border-rose-300 transition-all cursor-pointer inline-flex items-center"
+                          title="Hapus Antrean"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )}
 
       {/* NEW RECEIVING FORM MODAL */}
       {isFormOpen && (
@@ -622,6 +976,54 @@ export const IncomingView: React.FC = () => {
                     placeholder="Contoh: B 1234 CD"
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Operator Forklift</label>
+                  <div className="flex gap-2">
+                    {!isManualOperator ? (
+                      <select
+                        value={operatorForklift}
+                        onChange={e => {
+                          if (e.target.value === '__manual__') {
+                            setIsManualOperator(true);
+                            setOperatorForklift('');
+                          } else {
+                            setOperatorForklift(e.target.value);
+                          }
+                        }}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-semibold"
+                      >
+                        <option value="">-- Pilih Operator --</option>
+                        {users.filter(u => u.status === 'Aktif').map(u => (
+                          <option key={u.id} value={u.nama}>{u.nama} ({u.role})</option>
+                        ))}
+                        <option value="__manual__">✏️ Input Manual...</option>
+                      </select>
+                    ) : (
+                      <div className="flex gap-1 w-full">
+                        <input
+                          type="text"
+                          required
+                          value={operatorForklift}
+                          onChange={e => setOperatorForklift(e.target.value)}
+                          placeholder="Nama operator..."
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-semibold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsManualOperator(false);
+                            setOperatorForklift('');
+                          }}
+                          className="px-2 py-1 bg-slate-150 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-bold"
+                          title="Pilih dari daftar user"
+                        >
+                          Daftar
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -795,6 +1197,98 @@ export const IncomingView: React.FC = () => {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Gate Modal */}
+      {isQrModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md shadow-2xl text-slate-800 p-6 relative">
+            <button onClick={() => setIsQrModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-705 font-bold text-lg cursor-pointer">
+              ✕
+            </button>
+            
+            <div id="printable-poster" className="p-4 bg-white text-center flex flex-col items-center">
+              <h3 className="font-extrabold text-slate-900 text-lg uppercase tracking-tight">E-ANTREAN DRIVER QR CODE</h3>
+              <p className="text-xs text-slate-500 font-medium mb-4">Pendaftaran Mandiri & Cek Status Antrean Supir</p>
+              
+              {/* Center Visual QR Code */}
+              <div className="bg-white p-6 rounded-2xl border-2 border-slate-100 flex justify-center items-center my-4" style={{ width: '300px', height: '300px' }}>
+                {qrCodeDataUrl ? (
+                  <img
+                    src={qrCodeDataUrl}
+                    alt="Driver Check-In QR Code"
+                    width="268"
+                    height="268"
+                    className="block"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
+                ) : (
+                  <div className="w-[268px] h-[268px] flex items-center justify-center text-slate-400 text-xs font-semibold">
+                    Membuat QR Code...
+                  </div>
+                )}
+              </div>
+              
+              <p className="text-xs font-bold text-indigo-700 uppercase tracking-widest my-1">SCAN ME / PINDAI SAYA</p>
+              <div className="mt-2 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-[11px] font-mono select-all break-all w-full text-center font-bold">
+                {window.location.origin}/driver-checkin
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                Tempel poster ini di pos penjagaan gerbang masuk agar supir dapat melakukan pendaftaran antrean secara mandiri melalui smartphone.
+              </p>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => {
+                  if (qrCodeDataUrl) {
+                    const popupWin = window.open('', '_blank', 'width=600,height=750');
+                    if (popupWin) {
+                      popupWin.document.open();
+                      popupWin.document.write(`
+                        <html>
+                          <head>
+                            <title>Cetak QR Code Antrean</title>
+                            <style>
+                              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: white; }
+                              #printable-poster { border: 2px solid #e2e8f0; padding: 40px; border-radius: 24px; text-align: center; max-width: 440px; }
+                              h3 { font-size: 24px; margin: 0 0 8px 0; letter-spacing: -0.5px; }
+                              p { font-size: 14px; color: #64748b; margin: 0 0 24px 0; }
+                              .qrcode-container { padding: 24px; border: 2px solid #e2e8f0; background: #ffffff; border-radius: 16px; display: inline-block; margin: 16px 0; }
+                              .scan-me { font-weight: bold; color: #4f46e5; font-size: 12px; letter-spacing: 1px; margin-top: 16px; text-transform: uppercase; }
+                              .url { font-family: monospace; font-size: 11px; padding: 10px 14px; background: #f1f5f9; border-radius: 8px; margin: 12px 0; word-break: break-all; font-weight: bold; }
+                            </style>
+                          </head>
+                          <body onload="window.print();window.close();">
+                            <div id="printable-poster">
+                              <h3>E-ANTREAN DRIVER QR CODE</h3>
+                              <p>Pendaftaran Mandiri & Cek Status Antrean Supir</p>
+                              <div class="qrcode-container">
+                                <img src="${qrCodeDataUrl}" width="300" height="300" style="display: block; image-rendering: pixelated;" />
+                              </div>
+                              <div class="scan-me">SCAN ME / PINDAI SAYA</div>
+                              <div class="url">${window.location.origin}/driver-checkin</div>
+                            </div>
+                          </body>
+                        </html>
+                      `);
+                      popupWin.document.close();
+                    }
+                  }
+                }}
+                className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                Cetak Poster
+              </button>
+              <button
+                onClick={() => setIsQrModalOpen(false)}
+                className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+              >
+                Selesai
+              </button>
+            </div>
           </div>
         </div>
       )}

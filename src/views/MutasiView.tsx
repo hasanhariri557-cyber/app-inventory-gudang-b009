@@ -3,7 +3,7 @@ import { Repeat, Plus, Search, MapPin, ArrowRight } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 
 export const MutasiView: React.FC = () => {
-  const { mutasis, materials, gedungList, currentUser, addMutasi, getMaterialStockByGedung } = useWms();
+  const { mutasis, materials, gedungList, currentUser, addMutasi, getMaterialStockByGedung, users } = useWms();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -14,6 +14,8 @@ export const MutasiView: React.FC = () => {
   const [ke, setKe] = useState('Gedung E1');
   const [qty, setQty] = useState<string | number>(50);
   const [catatan, setCatatan] = useState('Mutasi internal antar gedung');
+  const [operatorForklift, setOperatorForklift] = useState('');
+  const [isManualOperator, setIsManualOperator] = useState(false);
 
   const parseVal = (v: any) => {
     if (typeof v === 'number') return v;
@@ -36,7 +38,8 @@ export const MutasiView: React.FC = () => {
       ke,
       qty: parseVal(qty),
       pic: currentUser.nama,
-      catatan
+      catatan,
+      operatorForklift: operatorForklift.trim() || undefined
     });
 
     setIsModalOpen(false);
@@ -102,13 +105,14 @@ export const MutasiView: React.FC = () => {
                 <th className="p-3.5">Ke (Tujuan)</th>
                 <th className="p-3.5">Qty</th>
                 <th className="p-3.5">PIC Stoker</th>
+                <th className="p-3.5">Operator Forklift</th>
                 <th className="p-3.5">Catatan</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredMutasi.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={9} className="p-8 text-center text-slate-400 italic">
                     Belum ada catatan mutasi barang.
                   </td>
                 </tr>
@@ -122,6 +126,11 @@ export const MutasiView: React.FC = () => {
                     <td className="p-3.5 text-emerald-600 font-medium">{m.ke}</td>
                     <td className="p-3.5 font-bold text-indigo-600">{m.qty} Unit</td>
                     <td className="p-3.5 text-slate-700">{m.pic}</td>
+                    <td className="p-3.5 whitespace-nowrap">
+                      <span className="font-semibold text-slate-700 text-xs bg-slate-100 border border-slate-200 px-2 py-1 rounded">
+                        {m.operatorForklift || '-'}
+                      </span>
+                    </td>
                     <td className="p-3.5 text-slate-500 italic">{m.catatan || '-'}</td>
                   </tr>
                 ))
@@ -206,14 +215,51 @@ export const MutasiView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Catatan Mutasi</label>
-                <input
-                  type="text"
-                  value={catatan}
-                  onChange={e => setCatatan(e.target.value)}
-                  placeholder="e.g. Penataan ulang rak"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
-                />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Operator Forklift</label>
+                <div className="flex gap-2">
+                  {!isManualOperator ? (
+                    <select
+                      value={operatorForklift}
+                      onChange={e => {
+                        if (e.target.value === '__manual__') {
+                          setIsManualOperator(true);
+                          setOperatorForklift('');
+                        } else {
+                          setOperatorForklift(e.target.value);
+                        }
+                      }}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+                    >
+                      <option value="">-- Pilih Operator --</option>
+                      {users.filter(u => u.status === 'Aktif').map(u => (
+                        <option key={u.id} value={u.nama}>{u.nama} ({u.role})</option>
+                      ))}
+                      <option value="__manual__">✏️ Input Manual...</option>
+                    </select>
+                  ) : (
+                    <div className="flex gap-1 w-full">
+                      <input
+                        type="text"
+                        required
+                        value={operatorForklift}
+                        onChange={e => setOperatorForklift(e.target.value)}
+                        placeholder="Nama operator..."
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsManualOperator(false);
+                          setOperatorForklift('');
+                        }}
+                        className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-[10px] font-bold"
+                        title="Pilih dari daftar user"
+                      >
+                        Daftar
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="pt-4 border-t border-slate-200 flex justify-end space-x-2">
