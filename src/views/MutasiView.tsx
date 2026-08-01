@@ -3,7 +3,7 @@ import { Repeat, Plus, Search, MapPin, ArrowRight } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 
 export const MutasiView: React.FC = () => {
-  const { mutasis, materials, gedungList, currentUser, addMutasi } = useWms();
+  const { mutasis, materials, gedungList, currentUser, addMutasi, getMaterialStockByGedung } = useWms();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -113,8 +113,8 @@ export const MutasiView: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredMutasi.map(m => (
-                  <tr key={m.id} className="hover:bg-slate-50 transition-colors">
+                filteredMutasi.map((m, idx) => (
+                  <tr key={`${m.id}-${idx}`} className="hover:bg-slate-50 transition-colors">
                     <td className="p-3.5 text-slate-500">{m.tanggal}</td>
                     <td className="p-3.5 font-mono font-bold text-indigo-600">{m.materialId}</td>
                     <td className="p-3.5 font-semibold text-slate-900">{m.namaBarang}</td>
@@ -151,8 +151,8 @@ export const MutasiView: React.FC = () => {
                   onChange={e => setMaterialId(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
                 >
-                  {materials.map(m => (
-                    <option key={m.id} value={m.id}>{m.id} - {m.namaBarang} ({m.currentStock} {m.satuan})</option>
+                  {materials.map((m, idx) => (
+                    <option key={`${m.id}-${idx}`} value={m.id}>{m.id} - {m.namaBarang} ({m.currentStock} {m.satuan})</option>
                   ))}
                 </select>
               </div>
@@ -165,9 +165,14 @@ export const MutasiView: React.FC = () => {
                     onChange={e => setDari(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
                   >
-                    {gedungList.map(g => (
-                      <option key={g.id} value={g.nama}>{g.nama}</option>
-                    ))}
+                    {gedungList.map((g, gIdx) => {
+                      const stockInGedung = selectedMat ? (getMaterialStockByGedung(selectedMat.id)[g.nama] || 0) : 0;
+                      return (
+                        <option key={`${g.id}-${gIdx}`} value={g.nama}>
+                          {g.nama} ({stockInGedung > 0 ? `Stok: ${stockInGedung}` : 'KOSONG'})
+                        </option>
+                      );
+                    })}
                     <option value="Area Receiving Staging">Area Receiving Staging</option>
                     <option value="Area Outbound Staging">Area Outbound Staging</option>
                   </select>

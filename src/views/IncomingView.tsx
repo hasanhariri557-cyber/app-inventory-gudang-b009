@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowDownLeft, Plus, Trash2, CheckCircle2, AlertTriangle, XCircle, Search, Layers, FileText, ChevronDown, Check } from 'lucide-react';
+import { ArrowDownLeft, Plus, Trash2, CheckCircle2, AlertTriangle, XCircle, Search, Layers, FileText, ChevronDown, Check, Pencil } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { IncomingDetail, IncomingHeader, Material } from '../types';
+import { calculatePalletCount, getUppPalletForMaterial } from '../utils/palletUtils';
 
 interface MaterialSearchSelectProps {
   selectedId: string;
@@ -75,11 +76,11 @@ const MaterialSearchSelect: React.FC<MaterialSearchSelectProps> = ({ selectedId,
                 Material &quot;{query}&quot; tidak ditemukan
               </div>
             ) : (
-              filteredMaterials.map(m => {
+              filteredMaterials.map((m, idx) => {
                 const isSelected = m.id === selectedId;
                 return (
                   <button
-                    key={m.id}
+                    key={`${m.id}-${idx}`}
                     type="button"
                     onClick={() => {
                       onSelect(m.id);
@@ -114,9 +115,10 @@ const MaterialSearchSelect: React.FC<MaterialSearchSelectProps> = ({ selectedId,
 };
 
 export const IncomingView: React.FC = () => {
-  const { incomingHeaders, materials, vendors, gedungList, addIncoming } = useWms();
+  const { incomingHeaders, materials, vendors, gedungList, addIncoming, updateIncoming, deleteIncoming } = useWms();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showTodayOnly, setShowTodayOnly] = useState(true);
@@ -132,26 +134,89 @@ export const IncomingView: React.FC = () => {
   const today = getLocalDateString();
   const [filterDate, setFilterDate] = useState(today);
   const [tanggal, setTanggal] = useState(today);
-  const [vendor, setVendor] = useState(vendors[0]?.namaVendor || '');
-  const [nomorPO, setNomorPO] = useState('No PO');
-  const [noSuratJalan, setNoSuratJalan] = useState('No SJ');
+  const [vendor, setVendor] = useState('');
+  const [nomorPO, setNomorPO] = useState('');
+  const [noSuratJalan, setNoSuratJalan] = useState('');
   const [platKendaraan, setPlatKendaraan] = useState('');
-  const [palletInCount, setPalletInCount] = useState<number>(10);
+  const [palletInCount, setPalletInCount] = useState<number>(0);
 
   // Details Form State
   const [details, setDetails] = useState<Omit<IncomingDetail, 'id'>[]>([
     {
       materialId: materials[0]?.id || '14000049',
       namaBarang: materials[0]?.namaBarang || 'ANTIBAC014L',
-      qtySuratJalan: 500,
+      qtySuratJalan: '' as any,
       qtyReject: 0,
-      qtyDiterima: 500,
+      qtyDiterima: 0,
       lokasiSimpan: 'Gedung B1',
       status: 'Good Receiving',
       alasanReject: '',
-      jumlahPallet: 1
+      jumlahPallet: '' as any
     }
   ]);
+
+  // Automatically accumulate Pallet IN count from details' manual/auto jumlahPallet
+  useEffect(() => {
+    const accumulated = details.reduce((sum, item) => {
+      const pallet = calculatePalletCount(item.qtyDiterima, item.materialId, materials, item.jumlahPallet);
+      return sum + pallet;
+    }, 0);
+    setPalletInCount(accumulated);
+  }, [details, materials]);
+
+  const handleOpenCreate = () => {
+    setEditingId(null);
+    setTanggal(today);
+    setVendor('');
+    setNomorPO('');
+    setNoSuratJalan('');
+    setPlatKendaraan('');
+    
+    const initialDetails = [
+      {
+        materialId: materials[0]?.id || '14000049',
+        namaBarang: materials[0]?.namaBarang || 'ANTIBAC014L',
+        qtySuratJalan: '' as any,
+        qtyReject: 0,
+        qtyDiterima: 0,
+        lokasiSimpan: 'Gedung B1',
+        status: 'Good Receiving' as const,
+        alasanReject: '',
+        jumlahPallet: '' as any
+      }
+    ];
+    setDetails(initialDetails);
+    setPalletInCount(0);
+    setIsFormOpen(true);
+  };
+
+  const handleOpenEdit = (header: IncomingHeader) => {
+    setEditingId(header.id);
+    setTanggal(header.tanggal);
+    setVendor(header.vendor);
+    setNomorPO(header.nomorPO);
+    setNoSuratJalan(header.noSuratJalan);
+    setPlatKendaraan(header.platKendaraan);
+    setPalletInCount(header.palletInCount);
+    setDetails(header.details.map(d => ({
+      materialId: d.materialId,
+      namaBarang: d.namaBarang,
+      qtySuratJalan: d.qtySuratJalan,
+      qtyReject: d.qtyReject,
+      qtyDiterima: d.qtyDiterima,
+      lokasiSimpan: d.lokasiSimpan,
+      status: d.status,
+      alasanReject: d.alasanReject || '',
+      jumlahPallet: d.jumlahPallet ?? 1
+    })));
+    setIsFormOpen(true);
+  };
+
+  const handleDelete = (id: string, noReceiving: string) => {
+    if (window.confirm(`Apakah Anda yakin ingin menghapus transaksi Incoming ${noReceiving}?`)) {
+      deleteIncoming(id);
+    }
+  };
 
   const handleAddLineItem = () => {
     const defaultMat = materials[0];
@@ -160,13 +225,13 @@ export const IncomingView: React.FC = () => {
       {
         materialId: defaultMat?.id || '14000049',
         namaBarang: defaultMat?.namaBarang || 'ANTIBAC014L',
-        qtySuratJalan: 100,
+        qtySuratJalan: '' as any,
         qtyReject: 0,
-        qtyDiterima: 100,
+        qtyDiterima: 0,
         lokasiSimpan: 'Gedung A1',
         status: 'Good Receiving',
         alasanReject: '',
-        jumlahPallet: 1
+        jumlahPallet: '' as any
       }
     ]);
   };
@@ -240,16 +305,21 @@ export const IncomingView: React.FC = () => {
       return isNaN(parsed) ? 0 : parsed;
     };
 
-    const parsedDetails = details.map((d, i) => ({
-      ...d,
-      id: `INCD-${Date.now()}-${i}`,
-      qtySuratJalan: parseVal(d.qtySuratJalan),
-      qtyReject: parseVal(d.qtyReject),
-      qtyDiterima: parseVal(d.qtyDiterima),
-      jumlahPallet: parseVal(d.jumlahPallet),
-    }));
+    const parsedDetails = details.map((d, i) => {
+      const qtyD = parseVal(d.qtyDiterima);
+      const manualP = parseVal(d.jumlahPallet);
+      const finalPallet = calculatePalletCount(qtyD, d.materialId, materials, manualP);
+      return {
+        ...d,
+        id: `INCD-${Date.now()}-${i}`,
+        qtySuratJalan: parseVal(d.qtySuratJalan),
+        qtyReject: parseVal(d.qtyReject),
+        qtyDiterima: qtyD,
+        jumlahPallet: finalPallet,
+      };
+    });
 
-    addIncoming({
+    const headerData = {
       tanggal,
       vendor,
       nomorPO,
@@ -257,16 +327,24 @@ export const IncomingView: React.FC = () => {
       platKendaraan,
       palletInCount: parseVal(palletInCount),
       details: parsedDetails
-    });
+    };
+
+    if (editingId) {
+      updateIncoming(editingId, headerData);
+    } else {
+      addIncoming(headerData);
+    }
 
     setIsFormOpen(false);
+    setEditingId(null);
   };
 
   const filteredHeaders = incomingHeaders.filter(h => {
     const matchesSearch = h.noReceiving.toLowerCase().includes(search.toLowerCase()) ||
       h.noSuratJalan.toLowerCase().includes(search.toLowerCase()) ||
       h.vendor.toLowerCase().includes(search.toLowerCase()) ||
-      h.nomorPO.toLowerCase().includes(search.toLowerCase());
+      h.nomorPO.toLowerCase().includes(search.toLowerCase()) ||
+      h.details.some(d => d.materialId.toLowerCase().includes(search.toLowerCase()) || d.namaBarang.toLowerCase().includes(search.toLowerCase()));
 
     if (showTodayOnly) {
       return matchesSearch && h.tanggal === filterDate;
@@ -292,7 +370,7 @@ export const IncomingView: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setIsFormOpen(true)}
+          onClick={handleOpenCreate}
           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center space-x-1.5 transition-all"
         >
           <Plus className="w-4 h-4" />
@@ -307,7 +385,7 @@ export const IncomingView: React.FC = () => {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Cari Vendor, PO, atau Surat Jalan..."
+            placeholder="Cari Vendor, PO, Surat Jalan, Material ID, Nama Barang..."
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 pl-9 text-xs text-slate-800 focus:outline-none focus:border-emerald-500"
           />
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -356,98 +434,104 @@ export const IncomingView: React.FC = () => {
             <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
               <tr>
                 <th className="p-3.5">Tanggal</th>
+                <th className="p-3.5">Material ID</th>
+                <th className="p-3.5">Nama Barang</th>
                 <th className="p-3.5">Vendor</th>
-                <th className="p-3.5">No PO</th>
-                <th className="p-3.5">No Surat Jalan</th>
                 <th className="p-3.5">Plat Kendaraan</th>
-                <th className="p-3.5">Pallet IN</th>
-                <th className="p-3.5 text-center">Items</th>
-                <th className="p-3.5 text-center">Detail</th>
+                <th className="p-3.5">No SJ</th>
+                <th className="p-3.5">No PO</th>
+                <th className="p-3.5">Qty Diterima</th>
+                <th className="p-3.5">Jumlah Pallet</th>
+                <th className="p-3.5">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredHeaders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={10} className="p-8 text-center text-slate-400 italic">
                     Tidak ada transaksi receiving ditemukan.
                   </td>
                 </tr>
               ) : (
                 filteredHeaders.map(h => {
-                  const isExpanded = expandedId === h.id;
                   return (
                     <React.Fragment key={h.id}>
                       <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3.5 text-slate-600 font-medium">{h.tanggal}</td>
-                        <td className="p-3.5 font-semibold text-slate-900">{h.vendor}</td>
-                        <td className="p-3.5 text-slate-500 font-mono">{h.nomorPO}</td>
-                        <td className="p-3.5 text-slate-700 font-medium">{h.noSuratJalan}</td>
-                        <td className="p-3.5 font-mono text-slate-500">{h.platKendaraan}</td>
+                        <td className="p-3.5 text-slate-600 font-medium whitespace-nowrap">{h.tanggal}</td>
+
+                        {/* Material ID */}
                         <td className="p-3.5">
-                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold rounded">
+                          <div className="space-y-1">
+                            {h.details.map((d, i) => (
+                              <div key={i} className="font-mono text-indigo-600 font-bold text-[11px]" title={d.materialId}>
+                                {d.materialId}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+
+                        {/* Nama Barang */}
+                        <td className="p-3.5">
+                          <div className="space-y-1 min-w-[130px]">
+                            {h.details.map((d, i) => (
+                              <div key={i} className="font-semibold text-slate-800 text-[11px]" title={d.namaBarang}>
+                                {d.namaBarang}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+
+                        {/* Vendor */}
+                        <td className="p-3.5 font-semibold text-slate-900">{h.vendor}</td>
+
+                        {/* Plat Kendaraan */}
+                        <td className="p-3.5 font-mono text-slate-500 whitespace-nowrap">{h.platKendaraan || '-'}</td>
+
+                        {/* No SJ */}
+                        <td className="p-3.5 text-slate-700 font-medium whitespace-nowrap">{h.noSuratJalan}</td>
+
+                        {/* No PO */}
+                        <td className="p-3.5 text-slate-500 font-mono whitespace-nowrap">{h.nomorPO}</td>
+
+                        {/* Qty Diterima */}
+                        <td className="p-3.5">
+                          <div className="space-y-1">
+                            {h.details.map((d, i) => (
+                              <div key={i} className="font-bold text-emerald-600 text-[11px] whitespace-nowrap">
+                                {d.qtyDiterima}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+
+                        {/* Jumlah Pallet */}
+                        <td className="p-3.5 whitespace-nowrap">
+                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold rounded text-[11px]">
                             {h.palletInCount} Pallet
                           </span>
                         </td>
-                        <td className="p-3.5 text-center font-bold text-slate-900">{h.details.length}</td>
-                        <td className="p-3.5 text-center">
-                          <button
-                            onClick={() => setExpandedId(isExpanded ? null : h.id)}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-lg transition-all"
-                          >
-                            {isExpanded ? 'Sembunyikan' : 'Lihat Detail'}
-                          </button>
+
+                        {/* Status */}
+                        <td className="p-3.5">
+                          <div className="space-y-1">
+                            {h.details.map((d, i) => (
+                              <div key={i} className="whitespace-nowrap">
+                                <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                                  d.status === 'Good Receiving' 
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                                    : d.status === 'Partial Receive'
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                    : d.status === 'Reject'
+                                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                }`}>
+                                  {d.status || 'Good Receiving'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </td>
                       </tr>
-
-                      {/* Expanded Sub-table for Items */}
-                      {isExpanded && (
-                        <tr className="bg-slate-50/70">
-                          <td colSpan={8} className="p-4">
-                            <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 shadow-xs">
-                              <h4 className="text-xs font-bold text-emerald-700 flex items-center space-x-1">
-                                <FileText className="w-3.5 h-3.5" />
-                                <span>Rincian Detail Barang</span>
-                              </h4>
-                              <table className="w-full text-left text-xs text-slate-700">
-                                <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600 font-semibold uppercase text-[10px]">
-                                  <tr>
-                                    <th className="p-2">Material ID</th>
-                                    <th className="p-2">Nama Barang</th>
-                                    <th className="p-2">Qty Pallet</th>
-                                    <th className="p-2">Qty SJ</th>
-                                    <th className="p-2">Qty Reject</th>
-                                    <th className="p-2">Qty Diterima</th>
-                                    <th className="p-2">Lokasi Simpan</th>
-                                    <th className="p-2">Status</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {h.details.map((d, idx) => (
-                                    <tr key={idx}>
-                                      <td className="p-2 font-mono text-indigo-600 font-bold">{d.materialId}</td>
-                                      <td className="p-2 font-medium text-slate-900">{d.namaBarang}</td>
-                                      <td className="p-2 font-bold text-amber-700">{d.jumlahPallet ?? 1} Pallet</td>
-                                      <td className="p-2 text-slate-500">{d.qtySuratJalan}</td>
-                                      <td className="p-2 font-bold text-rose-600">{d.qtyReject}</td>
-                                      <td className="p-2 font-bold text-emerald-600">{d.qtyDiterima}</td>
-                                      <td className="p-2 font-medium text-slate-700">{d.lokasiSimpan}</td>
-                                      <td className="p-2">
-                                        {d.status === 'Good Receiving' ? (
-                                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">Good Receiving</span>
-                                        ) : d.status === 'Tolak' ? (
-                                          <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-[10px] font-bold">Tolak Partial</span>
-                                        ) : (
-                                          <span className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded text-[10px] font-bold">Rejected</span>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                     </React.Fragment>
                   );
                 })
@@ -464,7 +548,7 @@ export const IncomingView: React.FC = () => {
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <h3 className="font-bold text-slate-900 text-base flex items-center space-x-2">
                 <ArrowDownLeft className="w-5 h-5 text-emerald-600" />
-                <span>Form Input Receiving Barang Masuk</span>
+                <span>{editingId ? 'Form Edit / Revisi Incoming Barang' : 'Form Input Receiving Barang Masuk'}</span>
               </h3>
               <button onClick={() => setIsFormOpen(false)} className="text-slate-400 hover:text-slate-700 font-bold">
                 ✕
@@ -487,16 +571,21 @@ export const IncomingView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Vendor</label>
-                  <select
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Vendor (Manual / Pilih)</label>
+                  <input
+                    type="text"
+                    list="vendor-datalist"
+                    required
                     value={vendor}
                     onChange={e => setVendor(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500"
-                  >
+                    placeholder="Ketik nama vendor..."
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-semibold"
+                  />
+                  <datalist id="vendor-datalist">
                     {vendors.map(v => (
                       <option key={v.id} value={v.namaVendor}>{v.namaVendor}</option>
                     ))}
-                  </select>
+                  </datalist>
                 </div>
 
                 <div>
@@ -506,7 +595,8 @@ export const IncomingView: React.FC = () => {
                     required
                     value={nomorPO}
                     onChange={e => setNomorPO(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500"
+                    placeholder="Masukkan No PO Pembelian..."
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
                   />
                 </div>
 
@@ -517,7 +607,8 @@ export const IncomingView: React.FC = () => {
                     required
                     value={noSuratJalan}
                     onChange={e => setNoSuratJalan(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500"
+                    placeholder="Masukkan No SJ Vendor..."
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
                   />
                 </div>
 
@@ -528,20 +619,28 @@ export const IncomingView: React.FC = () => {
                     required
                     value={platKendaraan}
                     onChange={e => setPlatKendaraan(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500"
+                    placeholder="Contoh: B 1234 CD"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Jumlah Pallet IN</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Jumlah Pallet IN</span>
+                    <span className="text-[10px] text-emerald-600 font-bold">(Akumulasi)</span>
+                  </label>
                   <input
                     type="text"
                     inputMode="decimal"
                     required
                     value={palletInCount}
                     onChange={e => setPalletInCount(e.target.value as any)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-emerald-50 border border-emerald-300 rounded-xl px-3 py-1.5 text-xs text-emerald-800 font-bold focus:outline-none focus:border-emerald-500"
+                    title="Jumlah otomatis ter-akumulasi dari total pallet setiap baris material"
                   />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">
+                    Total dari {details.length} item barang: <strong className="text-emerald-700">{palletInCount} Pallet</strong>
+                  </span>
                 </div>
               </div>
 
@@ -577,9 +676,10 @@ export const IncomingView: React.FC = () => {
                           <input
                             type="text"
                             inputMode="decimal"
-                            value={item.qtySuratJalan}
+                            value={item.qtySuratJalan ?? ''}
                             onChange={e => handleQtyChange(idx, 'qtySuratJalan', e.target.value)}
-                            className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500"
+                            placeholder="0"
+                            className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-semibold"
                           />
                         </div>
 
@@ -588,26 +688,39 @@ export const IncomingView: React.FC = () => {
                           <input
                             type="text"
                             inputMode="decimal"
-                            value={item.qtyReject}
+                            value={item.qtyReject ?? ''}
                             onChange={e => handleQtyChange(idx, 'qtyReject', e.target.value)}
+                            placeholder="0"
                             className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-rose-600 font-bold focus:outline-none focus:border-rose-500"
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-1">Jumlah Pallet</label>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={item.jumlahPallet ?? 1}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setDetails(prev => prev.map((d, i) => i === idx ? { ...d, jumlahPallet: val as any } : d));
-                            }}
-                            className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-semibold"
-                            placeholder="1"
-                          />
-                        </div>
+                        {(() => {
+                          const upp = getUppPalletForMaterial(item.materialId, materials);
+                          const autoPallet = calculatePalletCount(item.qtyDiterima, item.materialId, materials);
+                          return (
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-600 mb-1 flex items-center justify-between">
+                                <span>Jumlah Pallet</span>
+                                <span className="text-[10px] text-emerald-600 font-semibold">(Manual / Auto)</span>
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={item.jumlahPallet ?? ''}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setDetails(prev => prev.map((d, i) => i === idx ? { ...d, jumlahPallet: val as any } : d));
+                                }}
+                                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-semibold"
+                                placeholder={`Auto: ${autoPallet}`}
+                              />
+                              <span className="text-[10px] text-slate-500 mt-0.5 block truncate">
+                                UPP: {upp} • Auto: <strong className="text-emerald-700">{autoPallet} Plt</strong>
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center pt-2 border-t border-slate-200">
@@ -626,8 +739,8 @@ export const IncomingView: React.FC = () => {
                             }}
                             className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-800"
                           >
-                            {gedungList.map(g => (
-                              <option key={g.id} value={g.nama}>{g.nama} ({g.zona})</option>
+                            {gedungList.map((g, idx) => (
+                              <option key={`${g.id}-${idx}`} value={g.nama}>{g.nama} ({g.zona})</option>
                             ))}
                           </select>
                         </div>

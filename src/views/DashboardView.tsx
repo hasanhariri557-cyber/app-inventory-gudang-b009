@@ -730,8 +730,8 @@ _Dikirim dari Sistem WMS Pergudangan_`;
                     <td colSpan={4} className="p-4 text-center text-slate-400 italic">Semua stok material dalam batas aman.</td>
                   </tr>
                 ) : (
-                  filteredMaterials.filter(m => m.currentStock <= m.minStock).map(m => (
-                    <tr key={m.id} className="hover:bg-slate-50">
+                  filteredMaterials.filter(m => m.currentStock <= m.minStock).map((m, idx) => (
+                    <tr key={`${m.id}-${idx}`} className="hover:bg-slate-50">
                       <td className="p-2.5 font-mono font-semibold text-indigo-600">{m.id}</td>
                       <td className="p-2.5 font-medium text-slate-900">{m.namaBarang}</td>
                       <td className="p-2.5 font-bold text-slate-900">{m.currentStock} {m.satuan}</td>

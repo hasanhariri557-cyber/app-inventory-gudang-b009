@@ -2,19 +2,35 @@ import React, { useState } from 'react';
 import { MapPin, Layers, Boxes, Info, CheckCircle, MoveRight } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { Gedung } from '../types';
+import { calculatePalletCount, getUppPalletForMaterial } from '../utils/palletUtils';
 
 export const WarehouseLayoutView: React.FC = () => {
   const { gedungList, materials, getMaterialStockByGedung } = useWms();
   const [selectedGedung, setSelectedGedung] = useState<Gedung | null>(gedungList[0] || null);
 
+  // Helper to calculate total pallets stored in a Gedung based on stock & UPP Pallet
+  const getGedungCalculatedPallets = (gNama: string) => {
+    let totalPallets = 0;
+    materials.forEach(m => {
+      const bStocks = getMaterialStockByGedung(m.id);
+      const stockInBuilding = bStocks[gNama] || 0;
+      if (stockInBuilding > 0) {
+        totalPallets += calculatePalletCount(stockInBuilding, m.id, materials);
+      }
+    });
+    return totalPallets;
+  };
+
   // Filter materials stored in selected Gedung with stock > 0 in this Gedung
-  const storedMaterials: { id: string; namaBarang: string; currentStock: number; buildingStock: number; satuan: string; kategori: string }[] = [];
+  const storedMaterials: { id: string; namaBarang: string; currentStock: number; buildingStock: number; satuan: string; kategori: string; uppPallet: number; itemPallets: number }[] = [];
 
   if (selectedGedung) {
     materials.forEach(m => {
       const bStocks = getMaterialStockByGedung(m.id);
       const stockInBuilding = bStocks[selectedGedung.nama] || 0;
       if (stockInBuilding > 0) {
+        const itemPallets = calculatePalletCount(stockInBuilding, m.id, materials);
+        const upp = getUppPalletForMaterial(m.id, materials);
         storedMaterials.push({
           id: m.id,
           namaBarang: m.namaBarang,
@@ -22,6 +38,8 @@ export const WarehouseLayoutView: React.FC = () => {
           buildingStock: stockInBuilding,
           satuan: m.satuan,
           kategori: m.kategori,
+          uppPallet: upp,
+          itemPallets
         });
       }
     });
@@ -76,15 +94,29 @@ export const WarehouseLayoutView: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
           {gedungList.map(g => {
             const isSelected = selectedGedung?.id === g.id;
-            const pct = Math.round((g.palletTerisi / g.kapasitasPallet) * 100);
-            const occ = getOccupancyColor(g.palletTerisi, g.kapasitasPallet);
+            const calcPallets = getGedungCalculatedPallets(g.nama);
+            const displayTerisi = Math.max(g.palletTerisi, calcPallets);
+            const pct = Math.round((displayTerisi / g.kapasitasPallet) * 100);
+            const occ = getOccupancyColor(displayTerisi, g.kapasitasPallet);
+
+            // Calculate total physical stock & SKU count stored in this gedung
+            let totalBuildingQty = 0;
+            let totalBuildingSkus = 0;
+            materials.forEach(m => {
+              const bStocks = getMaterialStockByGedung(m.id);
+              const qtyInG = bStocks[g.nama] || 0;
+              if (qtyInG > 0) {
+                totalBuildingQty += qtyInG;
+                totalBuildingSkus += 1;
+              }
+            });
 
             return (
               <div
                 key={g.id}
                 onClick={() => setSelectedGedung(g)}
                 className={`
-                  p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 relative overflow-hidden flex flex-col justify-between min-h-[140px]
+                  p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 relative overflow-hidden flex flex-col justify-between min-h-[155px]
                   ${isSelected 
                     ? 'bg-white border-indigo-600 shadow-md ring-2 ring-indigo-500/20 scale-[1.02]' 
                     : 'bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-white'}
@@ -98,13 +130,18 @@ export const WarehouseLayoutView: React.FC = () => {
                   </span>
                 </div>
 
-                {/* Subtitle Zone */}
-                <p className="text-[10px] text-slate-500 font-medium truncate mt-1">{g.zona}</p>
+                {/* Subtitle Zone & Stats */}
+                <div>
+                  <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">{g.zona}</p>
+                  <p className="text-[10px] text-indigo-700 font-bold mt-1">
+                    {totalBuildingQty.toLocaleString('id-ID')} items <span className="text-slate-400 font-normal">({totalBuildingSkus} SKU)</span>
+                  </p>
+                </div>
 
                 {/* Occupancy Progress Bar */}
-                <div className="mt-4 space-y-1">
+                <div className="mt-3 space-y-1">
                   <div className="flex justify-between text-[10px] text-slate-500 font-semibold">
-                    <span>Terisi: {g.palletTerisi} Pallet</span>
+                    <span>Terisi: {displayTerisi} Pallet</span>
                     <span>Max: {g.kapasitasPallet}</span>
                   </div>
                   <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
@@ -137,13 +174,22 @@ export const WarehouseLayoutView: React.FC = () => {
 
             <div className="flex items-center space-x-4 bg-slate-50 px-4 py-2 rounded-xl border border-slate-200">
               <div>
+                <p className="text-[10px] text-slate-500">Total Stok Fisik</p>
+                <p className="text-sm font-bold text-indigo-700">
+                  {storedMaterials.reduce((sum, item) => sum + item.buildingStock, 0).toLocaleString('id-ID')} items
+                </p>
+              </div>
+              <div className="w-px h-8 bg-slate-200" />
+              <div>
                 <p className="text-[10px] text-slate-500">Total Kapasitas</p>
                 <p className="text-sm font-bold text-slate-900">{selectedGedung.kapasitasPallet} Pallet</p>
               </div>
               <div className="w-px h-8 bg-slate-200" />
               <div>
                 <p className="text-[10px] text-slate-500">Pallet Terpakai</p>
-                <p className="text-sm font-bold text-emerald-600">{selectedGedung.palletTerisi} Pallet</p>
+                <p className="text-sm font-bold text-emerald-600">
+                  {Math.max(selectedGedung.palletTerisi, getGedungCalculatedPallets(selectedGedung.nama))} Pallet
+                </p>
               </div>
             </div>
           </div>
@@ -157,12 +203,17 @@ export const WarehouseLayoutView: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 {storedMaterials.map((m, idx) => (
                   <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center space-x-3">
-                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
                       <Boxes className="w-4 h-4" />
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="text-xs font-bold text-slate-900 truncate">{m.namaBarang}</p>
-                      <p className="text-[10px] text-slate-500">{m.id} • <span className="font-semibold text-indigo-600">{m.buildingStock} {m.satuan}</span></p>
+                      <p className="text-[10px] text-slate-500">
+                        {m.id} • <span className="font-semibold text-indigo-600">{m.buildingStock} {m.satuan}</span>
+                      </p>
+                      <p className="text-[10px] text-emerald-700 font-bold mt-0.5">
+                        ~{m.itemPallets} Pallet <span className="text-slate-400 font-normal">(UPP: {m.uppPallet})</span>
+                      </p>
                     </div>
                   </div>
                 ))}

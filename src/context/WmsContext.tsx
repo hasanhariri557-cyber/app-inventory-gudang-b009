@@ -118,10 +118,12 @@ interface WmsContextType {
   deleteMaterial: (id: string) => void;
   
   addIncoming: (header: Omit<IncomingHeader, 'id' | 'noReceiving'>) => void;
+  updateIncoming: (id: string, header: Omit<IncomingHeader, 'id' | 'noReceiving'>) => void;
   updateRejectStatus: (id: string, status: RejectIncoming['status']) => void;
   
   addPutAway: (pa: Omit<PutAway, 'id' | 'tanggal' | 'status'>) => void;
   addOutbound: (outbound: Omit<OutboundHeader, 'id'>) => void;
+  updateOutbound: (id: string, outbound: Omit<OutboundHeader, 'id'>) => void;
   
   addStockOpname: (so: Omit<StockOpnameItem, 'id' | 'tanggal' | 'selisih'>) => void;
   approveStockOpnameAdjustment: (id: string) => void;
@@ -159,6 +161,7 @@ interface WmsContextType {
   checkPermission: (menu: string) => boolean;
   resetToDefaultData: () => void;
   getMaterialStockByGedung: (materialId: string) => Record<string, number>;
+  quickUpdateMaterialLocations: (materialId: string, newAllocations: Record<string, number>, newDefaultLoc?: string) => Promise<void>;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
 }
@@ -166,6 +169,17 @@ interface WmsContextType {
 const WmsContext = createContext<WmsContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY = 'WMS_GUDANG_TERINTEGRASI_DATA_V2';
+
+function deduplicateById<T extends { id: string }>(items: T[]): T[] {
+  if (!Array.isArray(items)) return [];
+  const seen = new Set<string>();
+  return items.filter(item => {
+    if (!item || !item.id) return false;
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
 
 export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -214,17 +228,18 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [materials, setMaterials] = useState<Material[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_materials`);
-    if (!saved) return INITIAL_MATERIALS;
+    if (!saved) return deduplicateById(INITIAL_MATERIALS);
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const existingIds = new Set(parsed.map((m: Material) => m.id));
+        const dedupedParsed = deduplicateById(parsed);
+        const existingIds = new Set(dedupedParsed.map((m: Material) => m.id));
         const missing = INITIAL_MATERIALS.filter(m => !existingIds.has(m.id));
-        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+        return missing.length > 0 ? deduplicateById([...dedupedParsed, ...missing]) : dedupedParsed;
       }
-      return INITIAL_MATERIALS;
+      return deduplicateById(INITIAL_MATERIALS);
     } catch {
-      return INITIAL_MATERIALS;
+      return deduplicateById(INITIAL_MATERIALS);
     }
   });
 
@@ -418,20 +433,20 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastCloudStrings.current['branding'] = JSON.stringify({ appLogoUrl, appTitle });
         } else {
           // If cloud has data, overwrite local states with the loaded cloud data
-          if (cloudMaterials.length > 0) setMaterials(cloudMaterials);
-          if (cloudUsers.length > 0) setUsers(cloudUsers);
-          if (cloudGedung.length > 0) setGedungList(cloudGedung);
-          if (cloudVendors.length > 0) setVendors(cloudVendors);
-          if (cloudIncoming.length > 0) setIncomingHeaders(cloudIncoming);
-          if (cloudRejects.length > 0) setRejects(cloudRejects);
-          if (cloudPutaway.length > 0) setPutAways(cloudPutaway);
-          if (cloudOutbound.length > 0) setOutboundHeaders(cloudOutbound);
-          if (cloudOpname.length > 0) setStockOpnames(cloudOpname);
-          if (cloudMutasi.length > 0) setMutasis(cloudMutasi);
-          if (cloudKartuStock.length > 0) setKartuStocks(cloudKartuStock);
-          if (cloudCategories.length > 0) setCategories(cloudCategories);
-          if (cloudUnits.length > 0) setUnits(cloudUnits);
-          if (cloudZones.length > 0) setZones(cloudZones);
+          if (cloudMaterials.length > 0) setMaterials(deduplicateById(cloudMaterials));
+          if (cloudUsers.length > 0) setUsers(deduplicateById(cloudUsers));
+          if (cloudGedung.length > 0) setGedungList(deduplicateById(cloudGedung));
+          if (cloudVendors.length > 0) setVendors(deduplicateById(cloudVendors));
+          if (cloudIncoming.length > 0) setIncomingHeaders(deduplicateById(cloudIncoming));
+          if (cloudRejects.length > 0) setRejects(deduplicateById(cloudRejects));
+          if (cloudPutaway.length > 0) setPutAways(deduplicateById(cloudPutaway));
+          if (cloudOutbound.length > 0) setOutboundHeaders(deduplicateById(cloudOutbound));
+          if (cloudOpname.length > 0) setStockOpnames(deduplicateById(cloudOpname));
+          if (cloudMutasi.length > 0) setMutasis(deduplicateById(cloudMutasi));
+          if (cloudKartuStock.length > 0) setKartuStocks(deduplicateById(cloudKartuStock));
+          if (cloudCategories.length > 0) setCategories(deduplicateById(cloudCategories));
+          if (cloudUnits.length > 0) setUnits(deduplicateById(cloudUnits));
+          if (cloudZones.length > 0) setZones(deduplicateById(cloudZones));
 
           lastCloudStrings.current['materials'] = JSON.stringify(cloudMaterials);
           lastCloudStrings.current['users'] = JSON.stringify(cloudUsers);
@@ -503,10 +518,11 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         collectionsToListen.forEach(({ name, setter }) => {
           const unsub = onSnapshot(collection(db, name), (snapshot) => {
-            const items: any[] = [];
+            const rawItems: any[] = [];
             snapshot.forEach((doc) => {
-              items.push({ id: doc.id, ...doc.data() });
+              rawItems.push({ id: doc.id, ...doc.data() });
             });
+            const items = deduplicateById(rawItems);
             const itemsStr = JSON.stringify(items);
             if (lastCloudStrings.current[name] !== itemsStr) {
               lastCloudStrings.current[name] = itemsStr;
@@ -1110,6 +1126,105 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Transaksi Incoming Berhasil', `Nomor Transaksi ${nextNo} berhasil disimpan & stok barang otomatis bertambah.`, 'success', 'Incoming Receiving');
   };
 
+  const updateIncoming = (id: string, headerData: Omit<IncomingHeader, 'id' | 'noReceiving'>) => {
+    const oldHeader = incomingHeaders.find(h => h.id === id);
+    if (!oldHeader) return;
+
+    // 1. Revert old stock and apply new stock to materials
+    setMaterials(prevMaterials => {
+      return prevMaterials.map(mat => {
+        const oldDetail = oldHeader.details.find(d => d.materialId === mat.id);
+        const oldQty = oldDetail ? oldDetail.qtyDiterima : 0;
+
+        const newDetail = headerData.details.find(d => d.materialId === mat.id);
+        const newQty = newDetail ? newDetail.qtyDiterima : 0;
+
+        const netChange = newQty - oldQty;
+        return {
+          ...mat,
+          currentStock: Math.max(0, mat.currentStock + netChange)
+        };
+      });
+    });
+
+    // 2. Revert and recalculate Gedung palletTerisi
+    setGedungList(prevGedungList => {
+      let updated = [...prevGedungList];
+      const oldValidDetails = oldHeader.details.filter(d => d.qtyDiterima > 0);
+      const oldTotalQty = oldValidDetails.reduce((sum, d) => sum + d.qtyDiterima, 0);
+      const oldTotalPallets = oldHeader.palletInCount > 0 ? oldHeader.palletInCount : oldValidDetails.length;
+
+      oldValidDetails.forEach(detail => {
+        const targetGedungName = detail.lokasiSimpan || 'Gedung A1';
+        const palShare = oldTotalQty > 0 
+          ? Math.max(1, Math.round((detail.qtyDiterima / oldTotalQty) * oldTotalPallets))
+          : 1;
+
+        updated = updated.map(g => {
+          if (g.nama.toLowerCase() === targetGedungName.toLowerCase() || g.id === targetGedungName) {
+            return { ...g, palletTerisi: Math.max(0, g.palletTerisi - palShare) };
+          }
+          return g;
+        });
+      });
+
+      const newValidDetails = headerData.details.filter(d => d.qtyDiterima > 0);
+      const newTotalQty = newValidDetails.reduce((sum, d) => sum + d.qtyDiterima, 0);
+      const newTotalPallets = headerData.palletInCount > 0 ? headerData.palletInCount : newValidDetails.length;
+
+      newValidDetails.forEach(detail => {
+        const targetGedungName = detail.lokasiSimpan || 'Gedung A1';
+        const palShare = newTotalQty > 0 
+          ? Math.max(1, Math.round((detail.qtyDiterima / newTotalQty) * newTotalPallets))
+          : 1;
+
+        updated = updated.map(g => {
+          if (g.nama.toLowerCase() === targetGedungName.toLowerCase() || g.id === targetGedungName) {
+            return { ...g, palletTerisi: Math.min(g.kapasitasPallet, g.palletTerisi + palShare) };
+          }
+          return g;
+        });
+      });
+
+      return updated;
+    });
+
+    // 3. Update Kartu Stock
+    setKartuStocks(prevKartu => {
+      const filtered = prevKartu.filter(ks => ks.refNo !== oldHeader.noReceiving);
+      const newKartuEntries: KartuStockEntry[] = [];
+      
+      headerData.details.forEach(detail => {
+        if (detail.qtyDiterima > 0) {
+          const mat = materials.find(m => m.id === detail.materialId);
+          newKartuEntries.push({
+            id: `KS-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+            tanggal: headerData.tanggal,
+            materialId: detail.materialId,
+            jenisTransaksi: 'Incoming',
+            refNo: oldHeader.noReceiving,
+            masuk: detail.qtyDiterima,
+            keluar: 0,
+            saldo: mat ? mat.currentStock : 0,
+            keterangan: `(Revisi) Terima dari Vendor ${headerData.vendor} (SJ: ${headerData.noSuratJalan})`,
+            lokasi: detail.lokasiSimpan
+          });
+        }
+      });
+      return [...newKartuEntries, ...filtered];
+    });
+
+    // 4. Update Header
+    const updatedHeader: IncomingHeader = {
+      ...headerData,
+      id,
+      noReceiving: oldHeader.noReceiving
+    };
+
+    setIncomingHeaders(prev => prev.map(h => h.id === id ? updatedHeader : h));
+    showNotification('Incoming Diperbarui', `Transaksi Incoming #${oldHeader.noReceiving} berhasil direvisi & stok diperbarui.`, 'success', 'Incoming Receiving');
+  };
+
   const updateRejectStatus = (id: string, status: RejectIncoming['status']) => {
     setRejects(prev => prev.map(r => r.id === id ? { ...r, status } : r));
     showNotification('Status Reject Diperbarui', `Status penanganan reject #${id} diubah menjadi '${status}'.`, 'success', 'Monitoring Reject');
@@ -1244,6 +1359,99 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Outbound Delivery Berhasil', `Surat Jalan ${outboundData.nomorDOSJ} berhasil diterbitkan & stok barang otomatis dikurangi.`, 'success', 'Outbound Delivery');
   };
 
+  const updateOutbound = (id: string, outboundData: Omit<OutboundHeader, 'id'>) => {
+    const oldHeader = outboundHeaders.find(o => o.id === id);
+    if (!oldHeader) return;
+
+    if (outboundData.isManual) {
+      const updatedHeader: OutboundHeader = {
+        ...outboundData,
+        id
+      };
+      setOutboundHeaders(prev => prev.map(o => o.id === id ? updatedHeader : o));
+      showNotification('Surat Jalan Manual Diperbarui', `Surat Jalan Manual ${outboundData.nomorDOSJ} berhasil direvisi.`, 'success', 'Surat Jalan Manual');
+      return;
+    }
+
+    // Check stock availability
+    const tempStockMap: Record<string, number> = {};
+    materials.forEach(m => {
+      tempStockMap[m.id] = m.currentStock;
+    });
+
+    // Revert old outbound qty to temp map
+    oldHeader.details.forEach(d => {
+      if (tempStockMap[d.materialId] !== undefined) {
+        tempStockMap[d.materialId] += d.qty;
+      }
+    });
+
+    // Check if new outbound qty is available in temp map
+    for (const detail of outboundData.details) {
+      if (detail.qty > 0) {
+        const mat = materials.find(m => m.id === detail.materialId);
+        const availableStock = tempStockMap[detail.materialId] || 0;
+        if (availableStock < detail.qty) {
+          showNotification(
+            'Stok Tidak Cukup',
+            `Revisi outbound dibatalkan karena total stok ${mat?.namaBarang || detail.materialId} tidak mencukupi.`,
+            'error',
+            'Outbound Delivery'
+          );
+          return;
+        }
+      }
+    }
+
+    // Apply stock changes
+    setMaterials(prev => prev.map(mat => {
+      const oldDetail = oldHeader.details.find(d => d.materialId === mat.id);
+      const oldQty = oldDetail ? oldDetail.qty : 0;
+
+      const newDetail = outboundData.details.find(d => d.materialId === mat.id);
+      const newQty = newDetail ? newDetail.qty : 0;
+
+      const diff = oldQty - newQty;
+      return {
+        ...mat,
+        currentStock: Math.max(0, mat.currentStock + diff)
+      };
+    }));
+
+    // Update Kartu Stock
+    setKartuStocks(prevKartu => {
+      const filtered = prevKartu.filter(ks => ks.refNo !== oldHeader.nomorDOSJ);
+      const newKartuEntries: KartuStockEntry[] = [];
+
+      outboundData.details.forEach(detail => {
+        if (detail.qty > 0) {
+          const mat = materials.find(m => m.id === detail.materialId);
+          newKartuEntries.push({
+            id: `KS-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+            tanggal: outboundData.tanggal,
+            materialId: detail.materialId,
+            jenisTransaksi: 'Outbound',
+            refNo: outboundData.nomorDOSJ,
+            masuk: 0,
+            keluar: detail.qty,
+            saldo: mat ? mat.currentStock : 0,
+            keterangan: `(Revisi) Kirim ke Customer ${outboundData.customer} (${outboundData.ekspedisi})`,
+            lokasi: detail.gedungAsal || mat?.lokasiDefaut || 'Gedung E1'
+          });
+        }
+      });
+      return [...newKartuEntries, ...filtered];
+    });
+
+    const updatedHeader: OutboundHeader = {
+      ...outboundData,
+      id
+    };
+
+    setOutboundHeaders(prev => prev.map(o => o.id === id ? updatedHeader : o));
+    showNotification('Outbound Diperbarui', `Surat Jalan ${outboundData.nomorDOSJ} berhasil direvisi & stok disesuaikan.`, 'success', 'Outbound Delivery');
+  };
+
   const addStockOpname = (soData: Omit<StockOpnameItem, 'id' | 'tanggal' | 'selisih'>) => {
     const selisih = soData.qtyFisik - soData.qtySistem;
     
@@ -1287,6 +1495,21 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addMutasi = (m: Omit<MutasiBarang, 'id' | 'tanggal'>) => {
+    const mat = materials.find(item => item.id === m.materialId);
+    if (mat) {
+      const bStocks = getMaterialStockByGedung(m.materialId);
+      const stockInSource = bStocks[m.dari] || 0;
+      if (stockInSource < m.qty) {
+        showNotification(
+          'Stok Tidak Cukup di ' + m.dari,
+          `Mutasi dibatalkan karena stok ${mat.namaBarang} di ${m.dari} tidak mencukupi (Tersedia: ${stockInSource} ${mat.satuan}, Dimutasi: ${m.qty} ${mat.satuan}).`,
+          'error',
+          'Mutasi Lokasi'
+        );
+        return;
+      }
+    }
+
     const newMutasi: MutasiBarang = {
       ...m,
       id: `MUT-${Date.now()}`,
@@ -1574,6 +1797,23 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const defaultLoc = mat.lokasiDefaut || 'Gedung A1';
 
+    // If material has explicit locationAllocations set via Quick Edit Lokasi
+    if (mat.locationAllocations && Object.keys(mat.locationAllocations).length > 0) {
+      let allocatedTotal = 0;
+      Object.entries(mat.locationAllocations).forEach(([bName, qty]) => {
+        if (stocks[bName] !== undefined) {
+          const val = Math.max(0, Number(qty) || 0);
+          stocks[bName] = val;
+          allocatedTotal += val;
+        }
+      });
+      if (allocatedTotal < mat.currentStock) {
+        const diff = mat.currentStock - allocatedTotal;
+        stocks[defaultLoc] = (stocks[defaultLoc] || 0) + diff;
+      }
+      return stocks;
+    }
+
     // 1. Process initial stock (SALDO-AWAL) from kartuStocks
     kartuStocks.forEach(ks => {
       if (ks.materialId === materialId && ks.refNo === 'SALDO-AWAL' && ks.masuk > 0) {
@@ -1628,6 +1868,69 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     return stocks;
+  };
+
+  const quickUpdateMaterialLocations = async (
+    materialId: string, 
+    newAllocations: Record<string, number>, 
+    newDefaultLoc?: string
+  ) => {
+    const targetMat = materials.find(m => m.id === materialId);
+    if (!targetMat) return;
+
+    // Calculate total allocated stock across buildings
+    const newTotalStock = Object.values(newAllocations).reduce((sum, v) => sum + Math.max(0, Number(v) || 0), 0);
+    
+    // Determine primary default location
+    let primaryLoc = newDefaultLoc || targetMat.lokasiDefaut || 'Gedung A1';
+    let maxQty = -1;
+    Object.entries(newAllocations).forEach(([bName, qty]) => {
+      const val = Number(qty) || 0;
+      if (val > maxQty) {
+        maxQty = val;
+        if (!newDefaultLoc) primaryLoc = bName;
+      }
+    });
+
+    const updatedMaterial: Material = {
+      ...targetMat,
+      lokasiDefaut: primaryLoc,
+      locationAllocations: newAllocations,
+      currentStock: newTotalStock > 0 ? newTotalStock : targetMat.currentStock
+    };
+
+    // 1. Update materials state & Firestore
+    setMaterials(prev => prev.map(m => m.id === materialId ? updatedMaterial : m));
+    await saveToFirestore('materials', materialId, {
+      lokasiDefaut: primaryLoc,
+      locationAllocations: newAllocations,
+      currentStock: updatedMaterial.currentStock
+    });
+
+    // 2. Update incomingHeaders location to match primaryLoc so transaction reports align
+    const updatedIncomings = incomingHeaders.map(h => {
+      let headerChanged = false;
+      const updatedDetails = h.details.map(d => {
+        if (d.materialId === materialId) {
+          headerChanged = true;
+          return { ...d, lokasiSimpan: primaryLoc };
+        }
+        return d;
+      });
+      if (headerChanged) {
+        saveToFirestore('incomingHeaders', h.id, { details: updatedDetails });
+        return { ...h, details: updatedDetails };
+      }
+      return h;
+    });
+    setIncomingHeaders(updatedIncomings);
+
+    showNotification(
+      'Koreksi Lokasi Disimpan',
+      `Lokasi simpan & alokasi stok per gedung untuk material ${targetMat.namaBarang} (${materialId}) berhasil diperbarui.`,
+      'success',
+      'Master Data Barang'
+    );
   };
 
   const resetToDefaultData = () => {
@@ -1692,9 +1995,11 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateMaterial,
       deleteMaterial,
       addIncoming,
+      updateIncoming,
       updateRejectStatus,
       addPutAway,
       addOutbound,
+      updateOutbound,
       addStockOpname,
       approveStockOpnameAdjustment,
       addMutasi,
@@ -1725,6 +2030,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       checkPermission,
       resetToDefaultData,
       getMaterialStockByGedung,
+      quickUpdateMaterialLocations,
       firebaseSyncStatus,
       theme,
       toggleTheme

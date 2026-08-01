@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { exportToExcel } from '../utils/exportUtils';
+import { calculatePalletCount, getUppPalletForMaterial } from '../utils/palletUtils';
 
 export const StockOpnameView: React.FC = () => {
   const {
@@ -31,16 +32,26 @@ export const StockOpnameView: React.FC = () => {
     approveStockOpnameAdjustment,
     deleteStockOpname,
     categories: contextCategories,
-    showNotification
+    showNotification,
+    getMaterialStockByGedung,
+    quickUpdateMaterialLocations
   } = useWms();
 
   const isAdmin = currentUser.role === 'Admin';
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [activeLocationFilter, setActiveLocationFilter] = useState('Semua');
+
+  // Stock Opname Per Kategori State
+  const [selectedCategoryOpname, setSelectedCategoryOpname] = useState<string | null>(null);
+  const [catQtyInputs, setCatQtyInputs] = useState<Record<string, string>>({});
+  const [catPalletInputs, setCatPalletInputs] = useState<Record<string, string>>({});
+  const [catNoteInputs, setCatNoteInputs] = useState<Record<string, string>>({});
+  const [catCheckedItems, setCatCheckedItems] = useState<Record<string, boolean>>({});
 
   // Single Item Form State
   const [selectedMaterialId, setSelectedMaterialId] = useState(materials[0]?.id || '');
@@ -218,6 +229,167 @@ export const StockOpnameView: React.FC = () => {
     setIsBulkModalOpen(false);
   };
 
+  // Open the Category Stock Opname Modal
+  const handleOpenCategoryModal = () => {
+    setSelectedCategoryOpname(null);
+    setCatQtyInputs({});
+    setCatPalletInputs({});
+    setCatNoteInputs({});
+    setCatCheckedItems({});
+    setIsCatModalOpen(true);
+  };
+
+  // Select a category inside the Category modal
+  const handleSelectCategoryOpname = (categoryName: string) => {
+    setSelectedCategoryOpname(categoryName);
+    
+    // Find all materials in this category and determine locations & systems
+    const matsInCat = materials.filter(m => m.kategori === categoryName && m.statusAktif);
+    
+    const initialQtys: Record<string, string> = {};
+    const initialPallets: Record<string, string> = {};
+    const initialNotes: Record<string, string> = {};
+    const initialChecked: Record<string, boolean> = {};
+
+    matsInCat.forEach(m => {
+      const bStocks = getMaterialStockByGedung(m.id) as Record<string, number>;
+      const nonZeroGedungs = Object.entries(bStocks).filter(([_, qty]) => (qty as number) > 0) as Array<[string, number]>;
+      
+      const processItem = (gedungName: string, qtySistem: number) => {
+        const key = `${m.id}_${gedungName}`;
+        initialQtys[key] = '0';
+        initialPallets[key] = '0';
+        initialNotes[key] = '';
+        initialChecked[key] = true;
+      };
+
+      if (nonZeroGedungs.length > 0) {
+        nonZeroGedungs.forEach(([gedungName, qty]) => {
+          processItem(gedungName, qty);
+        });
+      } else {
+        const defLoc = m.lokasiDefaut || 'Gedung A1';
+        processItem(defLoc, 0);
+      }
+    });
+
+    setCatQtyInputs(initialQtys);
+    setCatPalletInputs(initialPallets);
+    setCatNoteInputs(initialNotes);
+    setCatCheckedItems(initialChecked);
+  };
+
+  // Memoized items list for Category Opname
+  const categoryOpnameItems = useMemo(() => {
+    if (!selectedCategoryOpname) return [];
+    
+    const matsInCat = materials.filter(m => m.kategori === selectedCategoryOpname && m.statusAktif);
+    const items: Array<{
+      material: typeof materials[0];
+      gedung: string;
+      qtySistem: number;
+      palletSistem: number;
+    }> = [];
+
+    matsInCat.forEach(m => {
+      const bStocks = getMaterialStockByGedung(m.id) as Record<string, number>;
+      const nonZeroGedungs = Object.entries(bStocks).filter(([_, qty]) => (qty as number) > 0) as Array<[string, number]>;
+      
+      if (nonZeroGedungs.length > 0) {
+        nonZeroGedungs.forEach(([gedungName, qty]) => {
+          const pSistem = calculatePalletCount(qty, m.id, materials);
+          items.push({
+            material: m,
+            gedung: gedungName,
+            qtySistem: qty,
+            palletSistem: pSistem
+          });
+        });
+      } else {
+        const defLoc = m.lokasiDefaut || 'Gedung A1';
+        items.push({
+          material: m,
+          gedung: defLoc,
+          qtySistem: 0,
+          palletSistem: 0
+        });
+      }
+    });
+
+    return items;
+  }, [materials, selectedCategoryOpname, getMaterialStockByGedung]);
+
+  // Handler to save Category Opname counts
+  const handleCatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCategoryOpname) return;
+
+    let countSaved = 0;
+    
+    // We group updates by material ID so we can update building allocations for each material in one go
+    const materialUpdates: Record<string, {
+      material: typeof materials[0];
+      allocations: Record<string, number>;
+    }> = {};
+
+    categoryOpnameItems.forEach(item => {
+      const key = `${item.material.id}_${item.gedung}`;
+      
+      if (catCheckedItems[key]) {
+        const physicalQty = parseVal(catQtyInputs[key] ?? 0);
+        const physicalPallet = parseVal(catPalletInputs[key] ?? 0);
+        const note = catNoteInputs[key] || '';
+        
+        // 1. Add Stock Opname record to system history
+        addStockOpname({
+          materialId: item.material.id,
+          namaBarang: `${item.material.namaBarang} (${item.gedung})`,
+          qtySistem: item.qtySistem,
+          qtyFisik: physicalQty,
+          penyebab: note || `Opname per Kategori di ${item.gedung} (Fisik Pallet: ${physicalPallet})`,
+          status: 'Belum Selesai',
+          pic: currentUser.nama
+        });
+
+        // 2. Queue the stock allocation update
+        if (!materialUpdates[item.material.id]) {
+          materialUpdates[item.material.id] = {
+            material: item.material,
+            allocations: { ...getMaterialStockByGedung(item.material.id) }
+          };
+        }
+        
+        materialUpdates[item.material.id].allocations[item.gedung] = physicalQty;
+        countSaved++;
+      }
+    });
+
+    // Run system inventory updates
+    const updatePromises = Object.entries(materialUpdates).map(async ([matId, data]) => {
+      await quickUpdateMaterialLocations(matId, data.allocations, data.material.lokasiDefaut);
+    });
+
+    await Promise.all(updatePromises);
+
+    if (countSaved > 0) {
+      showNotification(
+        'Opname Kategori Berhasil',
+        `Berhasil menyimpan ${countSaved} hasil perhitungan fisik untuk kategori ${selectedCategoryOpname}.`,
+        'success',
+        'Stock Opname'
+      );
+    } else {
+      showNotification(
+        'Tidak ada item disimpan',
+        'Silakan centang item material yang ingin dicatat.',
+        'info',
+        'Stock Opname'
+      );
+    }
+
+    setIsCatModalOpen(false);
+  };
+
   const handleDeleteConfirm = async () => {
     if (!deleteConfirmId) return;
     if (!isAdmin) {
@@ -327,6 +499,14 @@ export const StockOpnameView: React.FC = () => {
           >
             <MapPin className="w-4 h-4" />
             <span>Mulai Hitung per Lokasi</span>
+          </button>
+
+          <button
+            onClick={handleOpenCategoryModal}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
+          >
+            <Layers className="w-4 h-4" />
+            <span>Mulai Hitung per Kategori</span>
           </button>
 
           <button
@@ -603,9 +783,9 @@ export const StockOpnameView: React.FC = () => {
                     {filteredMaterialsForSelect.length === 0 ? (
                       <div className="p-3 text-xs text-slate-500 italic">Material tidak ditemukan</div>
                     ) : (
-                      filteredMaterialsForSelect.map(m => (
+                      filteredMaterialsForSelect.map((m, idx) => (
                         <button
-                          key={m.id}
+                          key={`${m.id}-${idx}`}
                           type="button"
                           onClick={() => {
                             handleMaterialSelect(m.id);
@@ -833,7 +1013,7 @@ export const StockOpnameView: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {bulkLocationMaterials.map(m => {
+                            {bulkLocationMaterials.map((m, idx) => {
                               const isIncluded = !!bulkCheckedItems[m.id];
                               const inputQty = bulkQtyInputs[m.id] ?? '';
                               const parsedInput = parseVal(inputQty);
@@ -841,7 +1021,7 @@ export const StockOpnameView: React.FC = () => {
 
                               return (
                                 <tr
-                                  key={m.id}
+                                  key={`${m.id}-${idx}`}
                                   className={`transition-colors ${
                                     isIncluded ? 'bg-white hover:bg-slate-50/50' : 'bg-slate-50/50 opacity-60'
                                   }`}
@@ -962,7 +1142,7 @@ export const StockOpnameView: React.FC = () => {
                         </button>
                       </div>
 
-                      {bulkLocationMaterials.map(m => {
+                      {bulkLocationMaterials.map((m, idx) => {
                         const isIncluded = !!bulkCheckedItems[m.id];
                         const inputQty = bulkQtyInputs[m.id] ?? '';
                         const parsedInput = parseVal(inputQty);
@@ -970,7 +1150,7 @@ export const StockOpnameView: React.FC = () => {
 
                         return (
                           <div
-                            key={m.id}
+                            key={`${m.id}-${idx}`}
                             className={`p-3 border rounded-xl transition-all space-y-2.5 ${
                               isIncluded 
                                 ? 'bg-white border-slate-200 shadow-xs' 
@@ -1116,6 +1296,505 @@ export const StockOpnameView: React.FC = () => {
         </div>
       </div>
     )}
+
+      {/* CATEGORY STOCK OPNAME MODAL */}
+      {isCatModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-950/50 backdrop-blur-xs">
+          <div className="bg-white border-0 sm:border border-slate-200 rounded-none sm:rounded-2xl w-full max-w-5xl h-full sm:h-auto max-h-screen sm:max-h-[90vh] shadow-2xl overflow-hidden text-slate-800 flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="px-4 py-3 sm:px-6 sm:py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                    Stock Opname Fisik per Kategori Barang
+                  </h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Pilih kategori barang untuk memulai perhitungan fisik dan pencatatan selisih secara massal.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCatModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 font-bold p-1 text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="overflow-y-auto p-3 sm:p-6 flex-1 space-y-4 sm:space-y-6 min-h-0">
+              
+              {/* STEP 1: Select Category */}
+              {!selectedCategoryOpname ? (
+                <div className="space-y-4">
+                  <div className="text-center py-4">
+                    <h4 className="text-sm font-bold text-slate-800">Silakan Pilih Kategori Barang untuk Opname:</h4>
+                    <p className="text-xs text-slate-500 mt-1">Sistem akan memuat lembar kerja seluruh material aktif dalam kategori terpilih.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {contextCategories.map(cat => {
+                      const matsInCat = materials.filter(m => m.kategori === cat.nama && m.statusAktif);
+                      
+                      return (
+                        <button
+                          key={cat.id}
+                          onClick={() => handleSelectCategoryOpname(cat.nama)}
+                          className="p-5 text-left border border-slate-200 rounded-2xl bg-slate-50 hover:bg-indigo-50/40 hover:border-indigo-300 transition-all group flex flex-col justify-between cursor-pointer space-y-4"
+                        >
+                          <div className="flex items-start justify-between w-full">
+                            <div className="p-2.5 bg-white border border-slate-100 rounded-xl text-slate-700 group-hover:text-indigo-600 transition-all">
+                              <Layers className="w-5 h-5" />
+                            </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full group-hover:bg-indigo-100 group-hover:text-indigo-800 transition-all">
+                              {matsInCat.length} Item
+                            </span>
+                          </div>
+
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-950 transition-all capitalize">{cat.nama}</h4>
+                            <p className="text-[10px] text-slate-500 mt-1">
+                              Klik untuk memuat seluruh daftar hitung kategori {cat.nama}.
+                            </p>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-indigo-600 group-hover:text-indigo-700 w-full">
+                            <span>Mulai Hitung</span>
+                            <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                
+                // STEP 2: Input List for Selected Category
+                <div className="space-y-4">
+                  
+                  {/* Category Banner */}
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-indigo-700 tracking-wider uppercase bg-indigo-100 px-2 py-0.5 rounded-md">Kategori Terpilih</span>
+                      <h4 className="text-base font-bold text-indigo-950 mt-1 capitalize">{selectedCategoryOpname}</h4>
+                      <p className="text-xs text-indigo-800/80 mt-0.5">
+                        Ditemukan {categoryOpnameItems.length} baris alokasi lokasi material aktif.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategoryOpname(null)}
+                      className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-semibold rounded-lg transition-all self-start sm:self-center cursor-pointer"
+                    >
+                      Kembali Pilih Kategori Lain
+                    </button>
+                  </div>
+
+                  {/* Table/List Grid */}
+                  {categoryOpnameItems.length === 0 ? (
+                    <div className="p-12 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-slate-200">
+                      Tidak ada material aktif di kategori ini. Silakan tambahkan material atau atur kategorinya di Master Data.
+                    </div>
+                  ) : (
+                    <>
+                      {/* DESKTOP TABLE VIEW */}
+                      <div className="hidden lg:block border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs text-slate-700">
+                            <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
+                              <tr>
+                                <th className="p-3 text-center w-12">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const allChecked = categoryOpnameItems.every(item => {
+                                        const key = `${item.material.id}_${item.gedung}`;
+                                        return catCheckedItems[key];
+                                      });
+                                      const nextChecked: Record<string, boolean> = {};
+                                      categoryOpnameItems.forEach(item => {
+                                        const key = `${item.material.id}_${item.gedung}`;
+                                        nextChecked[key] = !allChecked;
+                                      });
+                                      setCatCheckedItems(nextChecked);
+                                    }}
+                                    className="text-[10px] text-indigo-600 hover:underline font-bold"
+                                  >
+                                    {categoryOpnameItems.every(item => {
+                                      const key = `${item.material.id}_${item.gedung}`;
+                                      return catCheckedItems[key];
+                                    }) ? 'Uncheck All' : 'Check All'}
+                                  </button>
+                                </th>
+                                <th className="p-3">Material ID & Nama</th>
+                                <th className="p-3 w-28">Lokasi Gedung</th>
+                                <th className="p-3 w-40 text-center">Stok & Pallet Sistem</th>
+                                <th className="p-3 w-36">Qty Fisik</th>
+                                <th className="p-3 w-28">Pallet Fisik</th>
+                                <th className="p-3 w-32">Kalkulasi Selisih</th>
+                                <th className="p-3">Keterangan / Penyebab Selisih</th>
+                                <th className="p-3 w-20 text-center">Aksi</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {categoryOpnameItems.map((item, idx) => {
+                                const key = `${item.material.id}_${item.gedung}`;
+                                const isIncluded = !!catCheckedItems[key];
+                                const inputQty = catQtyInputs[key] ?? '';
+                                const inputPallet = catPalletInputs[key] ?? '';
+                                
+                                const parsedQtyFisik = parseVal(inputQty);
+                                const parsedPalletFisik = parseVal(inputPallet);
+                                
+                                const selisihQty = parsedQtyFisik - item.qtySistem;
+                                const selisihPallet = parsedPalletFisik - item.palletSistem;
+                                const upp = item.material.uppPallet || 1000;
+
+                                return (
+                                  <tr
+                                    key={`${key}-${idx}`}
+                                    className={`transition-colors ${
+                                      isIncluded ? 'bg-white hover:bg-slate-50/50' : 'bg-slate-50/50 opacity-60'
+                                    }`}
+                                  >
+                                    <td className="p-3 text-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={isIncluded}
+                                        onChange={e => {
+                                          setCatCheckedItems(prev => ({
+                                            ...prev,
+                                            [key]: e.target.checked
+                                          }));
+                                        }}
+                                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                                      />
+                                    </td>
+                                    <td className="p-3">
+                                      <div>
+                                        <p className="font-mono font-bold text-slate-900">{item.material.id}</p>
+                                        <p className="font-semibold text-slate-700 text-xs mt-0.5">{item.material.namaBarang}</p>
+                                        <p className="text-[10px] text-slate-400">UPP: {upp} {item.material.satuan}/Pallet</p>
+                                      </div>
+                                    </td>
+                                    <td className="p-3">
+                                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-800 border border-indigo-100 rounded-md text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1 w-max">
+                                        <MapPin className="w-3 h-3 text-indigo-600 shrink-0" />
+                                        <span>{item.gedung}</span>
+                                      </span>
+                                    </td>
+                                    <td className="p-3 text-center">
+                                      <div className="font-semibold text-slate-700">
+                                        <p className="font-mono font-bold text-slate-900">{item.qtySistem.toLocaleString('id-ID')} {item.material.satuan}</p>
+                                        <p className="text-[10px] text-slate-500 font-mono">~{item.palletSistem.toLocaleString('id-ID')} Pallet</p>
+                                      </div>
+                                    </td>
+                                    <td className="p-3">
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        disabled={!isIncluded}
+                                        value={inputQty}
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          setCatQtyInputs(prev => ({ ...prev, [key]: val }));
+                                          const parsed = Math.max(0, parseFloat(val) || 0);
+                                          const autoPallet = Math.ceil(parsed / upp);
+                                          setCatPalletInputs(prev => ({ ...prev, [key]: String(autoPallet) }));
+                                        }}
+                                        className="w-full bg-white border-2 border-indigo-200 rounded-xl px-2 py-1.5 text-xs text-indigo-800 font-extrabold focus:outline-none focus:border-indigo-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 text-center"
+                                        placeholder="0"
+                                      />
+                                    </td>
+                                    <td className="p-3">
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        disabled={!isIncluded}
+                                        value={inputPallet}
+                                        onChange={e => setCatPalletInputs(prev => ({ ...prev, [key]: e.target.value }))}
+                                        className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-400 text-center"
+                                        placeholder="0"
+                                      />
+                                    </td>
+                                    <td className="p-3 font-semibold">
+                                      {isIncluded ? (
+                                        <div className="space-y-1">
+                                          <div>
+                                            {selisihQty === 0 ? (
+                                              <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-emerald-100">Sesuai (0)</span>
+                                            ) : selisihQty > 0 ? (
+                                              <span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-indigo-100">+{selisihQty.toLocaleString('id-ID')}</span>
+                                            ) : (
+                                              <span className="text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-rose-100">{selisihQty.toLocaleString('id-ID')}</span>
+                                            )}
+                                          </div>
+                                          <div className="text-[10px] font-mono text-slate-500">
+                                            Pallet:{' '}
+                                            {selisihPallet === 0 ? (
+                                              <span className="text-emerald-600 font-bold">Match</span>
+                                            ) : selisihPallet > 0 ? (
+                                              <span className="text-indigo-600 font-bold">+{selisihPallet}</span>
+                                            ) : (
+                                              <span className="text-rose-600 font-bold">{selisihPallet}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <span className="text-slate-400 font-normal">-</span>
+                                      )}
+                                    </td>
+                                    <td className="p-3">
+                                      <input
+                                        type="text"
+                                        disabled={!isIncluded}
+                                        value={catNoteInputs[key] || ''}
+                                        onChange={e => setCatNoteInputs(prev => ({ ...prev, [key]: e.target.value }))}
+                                        placeholder="Penyebab selisih..."
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                                      />
+                                    </td>
+                                    <td className="p-3 text-center">
+                                      <button
+                                        type="button"
+                                        disabled={!isIncluded}
+                                        onClick={() => {
+                                          setCatQtyInputs(prev => ({ ...prev, [key]: String(item.qtySistem) }));
+                                          setCatPalletInputs(prev => ({ ...prev, [key]: String(item.palletSistem) }));
+                                        }}
+                                        className="px-2 py-1 bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg transition-all disabled:opacity-45 cursor-pointer"
+                                        title="Set Qty Fisik sama dengan Qty Sistem"
+                                      >
+                                        Sesuai
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* MOBILE CARD VIEW */}
+                      <div className="block lg:hidden space-y-3">
+                        <div className="flex items-center justify-between p-2 bg-slate-100 border border-slate-200 rounded-xl">
+                          <span className="text-[10px] text-slate-500 font-bold px-1.5 uppercase">Aksi Cepat Massal</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allChecked = categoryOpnameItems.every(item => {
+                                const key = `${item.material.id}_${item.gedung}`;
+                                return catCheckedItems[key];
+                              });
+                              const nextChecked: Record<string, boolean> = {};
+                              categoryOpnameItems.forEach(item => {
+                                const key = `${item.material.id}_${item.gedung}`;
+                                nextChecked[key] = !allChecked;
+                              });
+                              setCatCheckedItems(nextChecked);
+                            }}
+                            className="text-xs text-indigo-700 hover:underline font-bold px-2.5 py-1 bg-white border border-indigo-100 rounded-lg shadow-2xs cursor-pointer"
+                          >
+                            {categoryOpnameItems.every(item => {
+                              const key = `${item.material.id}_${item.gedung}`;
+                              return catCheckedItems[key];
+                            }) ? 'Sembunyikan Semua' : 'Pilih Semua'}
+                          </button>
+                        </div>
+
+                        {categoryOpnameItems.map((item, idx) => {
+                          const key = `${item.material.id}_${item.gedung}`;
+                          const isIncluded = !!catCheckedItems[key];
+                          const inputQty = catQtyInputs[key] ?? '';
+                          const inputPallet = catPalletInputs[key] ?? '';
+                          
+                          const parsedQtyFisik = parseVal(inputQty);
+                          const parsedPalletFisik = parseVal(inputPallet);
+                          
+                          const selisihQty = parsedQtyFisik - item.qtySistem;
+                          const selisihPallet = parsedPalletFisik - item.palletSistem;
+                          const upp = item.material.uppPallet || 1000;
+
+                          return (
+                            <div
+                              key={`${key}-${idx}`}
+                              className={`p-3 border rounded-xl transition-all space-y-3 ${
+                                isIncluded 
+                                  ? 'bg-white border-slate-200 shadow-xs' 
+                                  : 'bg-slate-50/80 border-slate-200/60 opacity-65'
+                              }`}
+                            >
+                              {/* Header: Checkbox & Name */}
+                              <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
+                                <div className="flex items-start space-x-2.5">
+                                  <input
+                                    type="checkbox"
+                                    checked={isIncluded}
+                                    onChange={e => {
+                                      setCatCheckedItems(prev => ({
+                                        ...prev,
+                                        [key]: e.target.checked
+                                      }));
+                                    }}
+                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-5 h-5 cursor-pointer mt-0.5 shrink-0"
+                                  />
+                                  <div>
+                                    <p className="font-mono font-extrabold text-slate-900 text-xs leading-tight">{item.material.id}</p>
+                                    <p className="font-bold text-slate-700 text-xs mt-0.5 leading-snug">{item.material.namaBarang}</p>
+                                    <span className="mt-1 px-2 py-0.5 bg-indigo-50 text-indigo-800 text-[9px] font-extrabold rounded-md uppercase tracking-wider inline-flex items-center gap-0.5">
+                                      <MapPin className="w-2.5 h-2.5 text-indigo-600 shrink-0" />
+                                      <span>{item.gedung}</span>
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={!isIncluded}
+                                  onClick={() => {
+                                    setCatQtyInputs(prev => ({ ...prev, [key]: String(item.qtySistem) }));
+                                    setCatPalletInputs(prev => ({ ...prev, [key]: String(item.palletSistem) }));
+                                  }}
+                                  className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg px-2.5 py-1 disabled:opacity-40"
+                                >
+                                  Sesuai
+                                </button>
+                              </div>
+
+                              {/* Systems vs Physical Grid */}
+                              <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <div>
+                                  <p className="text-slate-400 font-semibold text-[10px]">STOK SISTEM</p>
+                                  <p className="font-bold text-slate-800 font-mono mt-0.5">{item.qtySistem.toLocaleString('id-ID')} {item.material.satuan}</p>
+                                  <p className="text-[10px] text-slate-500 font-mono">~{item.palletSistem} Pallet</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-400 font-semibold text-[10px]">UPP PALLET</p>
+                                  <p className="font-bold text-slate-800 font-mono mt-0.5">{upp} {item.material.satuan}</p>
+                                </div>
+                              </div>
+
+                              {/* Input Fields */}
+                              <div className="grid grid-cols-2 gap-3.5">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Qty Fisik</label>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    disabled={!isIncluded}
+                                    value={inputQty}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setCatQtyInputs(prev => ({ ...prev, [key]: val }));
+                                      const parsed = Math.max(0, parseFloat(val) || 0);
+                                      const autoPallet = Math.ceil(parsed / upp);
+                                      setCatPalletInputs(prev => ({ ...prev, [key]: String(autoPallet) }));
+                                    }}
+                                    className="w-full bg-white border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm text-indigo-800 font-extrabold text-center"
+                                    placeholder="0"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Pallet Fisik</label>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    disabled={!isIncluded}
+                                    value={inputPallet}
+                                    onChange={e => setCatPalletInputs(prev => ({ ...prev, [key]: e.target.value }))}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 font-bold text-center"
+                                    placeholder="0"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Selisih & Notes */}
+                              {isIncluded && (
+                                <div className="space-y-2 pt-1">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="text-slate-500">Kalkulasi Selisih:</span>
+                                    <div className="flex items-center gap-1.5 font-bold font-mono">
+                                      {selisihQty === 0 ? (
+                                        <span className="text-emerald-600">Match</span>
+                                      ) : selisihQty > 0 ? (
+                                        <span className="text-indigo-600">+{selisihQty} {item.material.satuan}</span>
+                                      ) : (
+                                        <span className="text-rose-600">{selisihQty} {item.material.satuan}</span>
+                                      )}
+                                      <span className="text-slate-300 font-normal">|</span>
+                                      <span className="text-slate-500">
+                                        Pallet: {selisihPallet > 0 ? `+${selisihPallet}` : selisihPallet}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <input
+                                    type="text"
+                                    disabled={!isIncluded}
+                                    value={catNoteInputs[key] || ''}
+                                    onChange={e => setCatNoteInputs(prev => ({ ...prev, [key]: e.target.value }))}
+                                    placeholder="Penyebab selisih / keterangan..."
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Sticky/Fixed submission footer - stays docked perfectly at the bottom */}
+            {selectedCategoryOpname && (
+              <div className="p-4 border-t border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 sticky bottom-0 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] sm:shadow-none">
+                <div className="flex items-center space-x-1.5 text-xs text-slate-600 font-semibold">
+                  <Info className="w-4 h-4 text-indigo-500 shrink-0" />
+                  <span>
+                    Daftar Opname:{' '}
+                    <strong className="text-indigo-600">
+                      {categoryOpnameItems.filter(item => {
+                        const key = `${item.material.id}_${item.gedung}`;
+                        return catCheckedItems[key];
+                      }).length} dari {categoryOpnameItems.length}
+                    </strong>{' '}
+                    baris alokasi aktif.
+                  </span>
+                </div>
+
+                <div className="flex space-x-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsCatModalOpen(false)}
+                    className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer text-center"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCatSubmit}
+                    disabled={categoryOpnameItems.filter(item => {
+                      const key = `${item.material.id}_${item.gedung}`;
+                      return catCheckedItems[key];
+                    }).length === 0}
+                    className="flex-[2] sm:flex-none px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer text-center"
+                  >
+                    Simpan Semua Opname Kategori
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* DELETE CONFIRMATION MODAL */}
       {deleteConfirmId && (

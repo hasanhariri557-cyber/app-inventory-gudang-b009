@@ -18,7 +18,9 @@ export interface Material {
   maxStock: number;
   currentStock: number;
   lokasiDefaut?: string;
+  locationAllocations?: Record<string, number>; // Breakdown alokasi stok per gedung
   statusAktif: boolean;
+  uppPallet?: number; // Units Per Pallet (Kapasitas Qty per Pallet)
 }
 
 export interface IncomingDetail {

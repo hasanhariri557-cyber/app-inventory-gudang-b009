@@ -211,8 +211,8 @@ export const KartuStockView: React.FC = () => {
               onChange={e => setSelectedMaterialId(e.target.value)}
               className="bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900 rounded-xl px-3 py-1.5 focus:outline-none focus:border-indigo-500 mt-1 cursor-pointer"
             >
-              {materials.map(m => (
-                <option key={m.id} value={m.id}>{m.id} - {m.namaBarang || m.nama}</option>
+              {materials.map((m, idx) => (
+                <option key={`${m.id}-${idx}`} value={m.id}>{m.id} - {m.namaBarang || m.nama}</option>
               ))}
             </select>
           </div>

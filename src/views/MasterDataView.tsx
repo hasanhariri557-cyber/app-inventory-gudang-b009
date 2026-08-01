@@ -1,18 +1,37 @@
 import React, { useState, useRef } from 'react';
-import { Package, Plus, Search, Filter, Edit3, Trash2, CheckCircle2, XCircle, FileSpreadsheet, AlertCircle, Upload } from 'lucide-react';
+import { Package, Plus, Search, Filter, Edit3, Trash2, CheckCircle2, XCircle, FileSpreadsheet, AlertCircle, Upload, MapPin } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { Material } from '../types';
 import { exportToExcel } from '../utils/exportUtils';
 import * as XLSX from 'xlsx';
 
 export const MasterDataView: React.FC = () => {
-  const { currentUser, adminAuthorities, materials, categories, units, addMaterial, updateMaterial, deleteMaterial, showNotification } = useWms();
+  const { 
+    currentUser, 
+    adminAuthorities, 
+    materials, 
+    categories, 
+    units, 
+    gedungList,
+    addMaterial, 
+    updateMaterial, 
+    deleteMaterial, 
+    showNotification, 
+    getMaterialStockByGedung,
+    quickUpdateMaterialLocations 
+  } = useWms();
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [deletingMaterial, setDeletingMaterial] = useState<Material | null>(null);
+
+  // Quick Edit Lokasi Modal State
+  const [quickEditMat, setQuickEditMat] = useState<Material | null>(null);
+  const [quickAllocations, setQuickAllocations] = useState<Record<string, number>>({});
+  const [quickDefaultLoc, setQuickDefaultLoc] = useState<string>('Gedung A1');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form State
@@ -25,6 +44,8 @@ export const MasterDataView: React.FC = () => {
   const [lokasiDefaut, setLokasiDefault] = useState('Gedung A1');
   const [statusAktif, setStatusAktif] = useState(true);
   const [currentStock, setCurrentStock] = useState<string>('0');
+  const [uppPallet, setUppPallet] = useState<string>('1000');
+  const [modalAllocations, setModalAllocations] = useState<Record<string, number>>({});
 
   const openCreateModal = () => {
     setEditingMaterial(null);
@@ -46,6 +67,11 @@ export const MasterDataView: React.FC = () => {
     setLokasiDefault('Gedung A1');
     setStatusAktif(true);
     setCurrentStock('0');
+    setUppPallet('1000');
+
+    const initAlloc: Record<string, number> = {};
+    gedungList.forEach(g => { initAlloc[g.nama] = 0; });
+    setModalAllocations(initAlloc);
     setIsModalOpen(true);
   };
 
@@ -60,10 +86,27 @@ export const MasterDataView: React.FC = () => {
     setLokasiDefault(mat.lokasiDefaut || 'Gedung A1');
     setStatusAktif(mat.statusAktif);
     setCurrentStock(String(mat.currentStock));
+    setUppPallet(String(mat.uppPallet || 1000));
+
+    const bStocks = getMaterialStockByGedung(mat.id);
+    setModalAllocations(bStocks);
     setIsModalOpen(true);
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const openQuickEditLokasi = (mat: Material) => {
+    setQuickEditMat(mat);
+    const bStocks = getMaterialStockByGedung(mat.id);
+    setQuickAllocations(bStocks);
+    setQuickDefaultLoc(mat.lokasiDefaut || 'Gedung A1');
+  };
+
+  const handleSaveQuickEditLokasi = async () => {
+    if (!quickEditMat) return;
+    await quickUpdateMaterialLocations(quickEditMat.id, quickAllocations, quickDefaultLoc);
+    setQuickEditMat(null);
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!namaBarang.trim()) return;
 
@@ -76,6 +119,7 @@ export const MasterDataView: React.FC = () => {
     };
 
     const parsedStock = parseVal(currentStock);
+    const parsedUpp = parseVal(uppPallet) || 1000;
 
     if (editingMaterial) {
       updateMaterial(editingMaterial.id, {
@@ -86,8 +130,12 @@ export const MasterDataView: React.FC = () => {
         maxStock,
         lokasiDefaut,
         statusAktif,
-        currentStock: parsedStock
+        currentStock: parsedStock,
+        uppPallet: parsedUpp
       });
+      if (currentUser.role === 'Admin') {
+        await quickUpdateMaterialLocations(editingMaterial.id, modalAllocations, lokasiDefaut);
+      }
     } else {
       addMaterial({
         id: materialId.trim(),
@@ -98,8 +146,12 @@ export const MasterDataView: React.FC = () => {
         maxStock,
         lokasiDefaut,
         statusAktif,
-        currentStock: parsedStock
+        currentStock: parsedStock,
+        uppPallet: parsedUpp
       });
+      if (currentUser.role === 'Admin' && Object.keys(modalAllocations).length > 0) {
+        await quickUpdateMaterialLocations(materialId.trim(), modalAllocations, lokasiDefaut);
+      }
     }
 
     setIsModalOpen(false);
@@ -117,6 +169,7 @@ export const MasterDataView: React.FC = () => {
       'Nama Barang': m.namaBarang,
       'Kategori': m.kategori,
       'Satuan': m.satuan,
+      'UPP Pallet': m.uppPallet || 1000,
       'Stok Saat Ini': m.currentStock,
       'Lokasi Default': m.lokasiDefaut || '-',
       'Status Aktif': m.statusAktif ? 'Aktif' : 'Non-Aktif'
@@ -143,6 +196,7 @@ export const MasterDataView: React.FC = () => {
           namaBarang: row['Nama Barang'],
           kategori: row['Kategori'],
           satuan: row['Satuan'],
+          uppPallet: row['UPP Pallet'] || 1000,
           minStock: row['Stok Minimum'] || 0,
           maxStock: row['Stok Maksimum'] || 1000,
           currentStock: row['Stok Saat Ini'] || 0,
@@ -235,8 +289,8 @@ export const MasterDataView: React.FC = () => {
             className="bg-slate-50 border border-slate-200 text-xs text-slate-700 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
           >
             <option value="ALL">Semua Kategori</option>
-            {categories.map(c => (
-              <option key={c.id} value={c.nama}>{c.nama}</option>
+            {categories.map((c, idx) => (
+              <option key={`${c.id}-${idx}`} value={c.nama}>{c.nama}</option>
             ))}
           </select>
         </div>
@@ -252,6 +306,7 @@ export const MasterDataView: React.FC = () => {
                 <th className="p-3.5">Nama Barang</th>
                 <th className="p-3.5">Kategori</th>
                 <th className="p-3.5">Satuan</th>
+                <th className="p-3.5">UPP Pallet</th>
                 <th className="p-3.5">Stok Sistem</th>
                 <th className="p-3.5">Status Aktif</th>
                 <th className="p-3.5 text-center">Aksi</th>
@@ -260,13 +315,13 @@ export const MasterDataView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredMaterials.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={8} className="p-8 text-center text-slate-400 italic">
                     Tidak ada data material ditemukan.
                   </td>
                 </tr>
               ) : (
-                filteredMaterials.map(m => (
-                  <tr key={m.id} className="hover:bg-slate-50 transition-colors">
+                filteredMaterials.map((m, idx) => (
+                  <tr key={`${m.id}-${idx}`} className="hover:bg-slate-50 transition-colors">
                     <td className="p-3.5 font-mono font-bold text-indigo-600">{m.id}</td>
                     <td className="p-3.5 font-semibold text-slate-900">{m.namaBarang}</td>
                     <td className="p-3.5">
@@ -275,12 +330,32 @@ export const MasterDataView: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3.5 text-slate-500">{m.satuan}</td>
+                    <td className="p-3.5 font-semibold text-indigo-700 font-mono text-[11px]">
+                      <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded-md">
+                        {m.uppPallet || 1000} {m.satuan}/Pallet
+                      </span>
+                    </td>
                     <td className="p-3.5 font-bold text-slate-900">
                       <span className={`px-2 py-0.5 rounded ${
                         m.currentStock <= m.minStock ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       }`}>
-                        {m.currentStock} {m.satuan}
+                        {m.currentStock.toLocaleString('id-ID')} {m.satuan}
                       </span>
+                      {(() => {
+                        const bStocks = getMaterialStockByGedung(m.id);
+                        const activeBuildings = Object.entries(bStocks).filter(([_, qty]) => (qty as number) > 0);
+                        if (activeBuildings.length === 0) return null;
+                        return (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {activeBuildings.map(([bName, qty]) => (
+                              <span key={bName} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-medium border border-slate-200" title={`Stok di ${bName}`}>
+                                <MapPin className="w-2.5 h-2.5 text-indigo-500" />
+                                <span>{bName}: <strong>{(qty as number).toLocaleString('id-ID')}</strong></span>
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="p-3.5">
                       {m.statusAktif ? (
@@ -295,11 +370,20 @@ export const MasterDataView: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="p-3.5 text-center space-x-2">
+                    <td className="p-3.5 text-center space-x-1.5">
+                      {currentUser.role === 'Admin' && (
+                        <button
+                          onClick={() => openQuickEditLokasi(m)}
+                          className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg border border-indigo-200 transition-all cursor-pointer inline-flex items-center"
+                          title="Quick Edit Lokasi & Alokasi Stok"
+                        >
+                          <MapPin className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         disabled={adminAuthorities.editMasterData && currentUser.role !== 'Admin'}
                         onClick={() => openEditModal(m)}
-                        className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                        className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer inline-flex items-center"
                         title={adminAuthorities.editMasterData && currentUser.role !== 'Admin' ? 'Otoritas edit khusus Admin' : 'Edit Material'}
                       >
                         <Edit3 className="w-3.5 h-3.5" />
@@ -307,7 +391,7 @@ export const MasterDataView: React.FC = () => {
                       <button
                         disabled={adminAuthorities.deleteMasterData && currentUser.role !== 'Admin'}
                         onClick={() => setDeletingMaterial(m)}
-                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer inline-flex items-center"
                         title={adminAuthorities.deleteMasterData && currentUser.role !== 'Admin' ? 'Otoritas hapus khusus Admin' : 'Hapus Material'}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -390,7 +474,7 @@ export const MasterDataView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Lokasi Default Gedung</label>
                   <select
@@ -408,16 +492,82 @@ export const MasterDataView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Stok Sistem (Qty Sistem)</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    UPP Pallet <span className="text-[10px] text-indigo-600 font-normal">(Units/Pallet)</span>
+                  </label>
                   <input
                     type="text"
                     inputMode="decimal"
                     required
+                    value={uppPallet}
+                    onChange={e => setUppPallet(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-indigo-700 font-bold focus:outline-none focus:border-indigo-500 font-mono"
+                    placeholder="e.g. 1000"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Stok Sistem (Qty)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    required
+                    disabled={currentUser.role === 'Admin'}
                     value={currentStock}
                     onChange={e => setCurrentStock(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-bold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-bold disabled:bg-slate-100 disabled:text-slate-600"
                     placeholder="e.g. 100"
                   />
+                </div>
+              </div>
+
+              {/* Rincian Alokasi Stok per Gedung */}
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/60">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Rincian Alokasi Stok Per Gedung</span>
+                  </span>
+                  {currentUser.role === 'Admin' && (
+                    <span className="text-[10px] text-indigo-600 font-semibold bg-indigo-50 px-1.5 py-0.5 rounded-md animate-pulse">
+                      Mode Koreksi Aktif
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {gedungList.map(g => {
+                    const isReadOnly = currentUser.role !== 'Admin';
+                    return (
+                      <div key={g.id} className="p-2 bg-white rounded-lg border border-slate-200 flex flex-col justify-between">
+                        <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">{g.nama}</span>
+                        {isReadOnly ? (
+                          <div className="text-xs font-bold text-slate-800 font-mono mt-1">
+                            {Number(modalAllocations[g.nama] || 0).toLocaleString('id-ID')} {satuan}
+                          </div>
+                        ) : (
+                          <div className="mt-1 flex items-center space-x-1">
+                            <input
+                              type="number"
+                              min="0"
+                              value={modalAllocations[g.nama] !== undefined ? modalAllocations[g.nama] : ''}
+                              onChange={e => {
+                                const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                setModalAllocations(prev => {
+                                  const nextAll = { ...prev, [g.nama]: val };
+                                  const sum = Object.values(nextAll).reduce<number>((a, b) => a + (Number(b) || 0), 0);
+                                  setCurrentStock(String(sum));
+                                  return nextAll;
+                                });
+                              }}
+                              className="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500 font-mono"
+                              placeholder="0"
+                            />
+                            <span className="text-[10px] text-slate-400">{satuan}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -480,6 +630,96 @@ export const MasterDataView: React.FC = () => {
                 className="w-1/2 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-rose-600/20 transition-all cursor-pointer"
               >
                 Hapus Sekarang
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK EDIT LOKASI MODAL */}
+      {quickEditMat && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 max-h-[90vh] flex flex-col">
+            <div className="flex items-center space-x-2 text-indigo-600 mb-3 flex-shrink-0">
+              <MapPin className="w-6 h-6 animate-bounce" />
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Koreksi Cepat Lokasi & Stok</h3>
+                <p className="text-xs text-slate-500">Koreksi alokasi fisik barang di setiap gedung</p>
+              </div>
+            </div>
+
+            <div className="mb-4 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl flex-shrink-0">
+              <div className="text-xs font-bold text-indigo-950">{quickEditMat.namaBarang}</div>
+              <div className="text-[10px] font-mono font-bold text-indigo-600 mt-0.5">ID: {quickEditMat.id}</div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1.5 space-y-4 min-h-0 pb-2">
+              {/* Default Location Select */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Gedung Utama (Default)</label>
+                <select
+                  value={quickDefaultLoc}
+                  onChange={e => setQuickDefaultLoc(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                >
+                  {gedungList.map(g => (
+                    <option key={g.id} value={g.nama}>{g.nama}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Allocations Grid */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-2">Alokasi Stok per Gedung</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {gedungList.map(g => (
+                    <div key={g.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-between">
+                      <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">{g.nama}</span>
+                      <div className="mt-1 flex items-center space-x-1">
+                        <input
+                          type="number"
+                          min="0"
+                          value={quickAllocations[g.nama] !== undefined ? quickAllocations[g.nama] : ''}
+                          onChange={e => {
+                            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            setQuickAllocations(prev => ({
+                              ...prev,
+                              [g.nama]: val
+                            }));
+                          }}
+                          className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500 font-mono"
+                          placeholder="0"
+                        />
+                        <span className="text-[10px] text-slate-400">{quickEditMat.satuan}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sum Summary */}
+              <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-between">
+                <span className="text-xs font-medium text-emerald-800">Total Stok Baru:</span>
+                <span className="text-xs font-bold text-emerald-950 font-mono">
+                  {Object.values(quickAllocations).reduce<number>((sum, v) => sum + (Number(v) || 0), 0).toLocaleString('id-ID')} {quickEditMat.satuan}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3 mt-4 pt-4 border-t border-slate-100 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setQuickEditMat(null)}
+                className="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer text-center"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQuickEditLokasi}
+                className="w-1/2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-indigo-600/20 transition-all cursor-pointer text-center"
+              >
+                Simpan Perubahan
               </button>
             </div>
           </div>

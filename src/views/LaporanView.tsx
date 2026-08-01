@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Download, Printer, Filter, Calendar, FileSpreadsheet, Trash2 } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
-import { exportToExcel, exportToPDF } from '../utils/exportUtils';
+import { exportToExcel, exportToPDF, generateSuratJalanPDF } from '../utils/exportUtils';
 
 type ReportType = 
   | 'incoming'
@@ -33,7 +33,8 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
     deleteReject,
     deleteStockOpname,
     deleteKartuStock,
-    deleteMaterial
+    deleteMaterial,
+    appLogoUrl
   } = useWms();
 
   useEffect(() => {
@@ -54,9 +55,19 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
     
     try {
       if (type === 'incoming' || type === 'pallet_in' || type === 'vendor_mobil') {
-        await deleteIncoming(id);
+        const targetIncoming = incomingHeaders.find(h => h.id === id || h.noReceiving === id || h.noSuratJalan === id);
+        if (targetIncoming) {
+          await deleteIncoming(targetIncoming.id);
+        } else {
+          await deleteIncoming(id);
+        }
       } else if (type === 'outbound' || type === 'pallet_out') {
-        await deleteOutbound(id);
+        const targetOutbound = outboundHeaders.find(o => o.id === id || o.nomorDOSJ === id);
+        if (targetOutbound) {
+          await deleteOutbound(targetOutbound.id);
+        } else {
+          await deleteOutbound(id);
+        }
       } else if (type === 'reject') {
         await deleteReject(id);
       } else if (type === 'stock') {
@@ -102,27 +113,35 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
         return incomingHeaders
           .filter(h => filterByDate(h.tanggal))
           .map(h => ({
-            'ID Transaksi': h.id,
             'Tanggal': h.tanggal,
+            'Material ID': h.details.map(d => d.materialId).join('\n'),
+            'Nama Barang': h.details.map(d => d.namaBarang).join('\n'),
             'Vendor': h.vendor,
+            'Plat Kendaraan': h.platKendaraan || '-',
+            'No SJ': h.noSuratJalan,
             'No PO': h.nomorPO,
-            'No Surat Jalan': h.noSuratJalan,
-            'Plat Kendaraan': h.platKendaraan,
-            'Pallet IN': h.palletInCount,
-            'Items': h.details.length
+            'Qty Diterima': h.details.map(d => d.qtyDiterima.toLocaleString('id-ID')).join('\n'),
+            'Jumlah Pallet': `${h.palletInCount} Pallet`,
+            'Status': h.details.map(d => d.status || 'Good Receiving').join('\n')
           }));
 
       case 'outbound':
         return outboundHeaders
           .filter(o => filterByDate(o.tanggal))
           .map(o => ({
-            'ID Transaksi': o.id,
-            'Nomor DO/SJ': o.nomorDOSJ,
+            'Nomor DO / SJ': o.nomorDOSJ,
             'Tanggal': o.tanggal,
-            'Customer': o.customer,
+            'Material ID': o.details.map(d => d.materialId).join('\n'),
+            'Nama Barang': o.details.map(d => d.namaBarang).join('\n'),
+            'Qty': o.details.map(d => d.qty.toLocaleString('id-ID')).join('\n'),
+            'Satuan': o.details.map(d => d.satuan).join('\n'),
+            'Lokasi': o.details.map(d => d.gedungAsal || '-').join('\n'),
+            'Pallet OUT': `${o.palletOutCount} Pallet`,
+            'Customer / Tujuan': o.customer,
             'Ekspedisi': o.ekspedisi,
-            'Pallet OUT': o.palletOutCount,
-            'Jumlah SKU': o.details.length
+            'No. Kendaraan': o.noKendaraan || '-',
+            'PIC Checker': o.details.map(d => d.picChecker || '-').join('\n'),
+            'Keterangan': o.details.map(d => d.keterangan || '-').join('\n')
           }));
 
       case 'reject':
@@ -374,40 +393,58 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
                   {Object.keys(reportData[0]).map((key, i) => (
                     <th key={i} className="p-3">{key}</th>
                   ))}
-                  {isAdmin && <th className="p-3 text-right">Aksi</th>}
+                  <th className="p-3 text-center font-bold">Aksi</th>
                 </tr>
               </thead>
             )}
             <tbody className="divide-y divide-slate-100">
               {reportData.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 10 : 8} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={10} className="p-8 text-center text-slate-400 italic">
                     Tidak ada data untuk laporan ini pada rentang tanggal yang dipilih.
                   </td>
                 </tr>
               ) : (
                 reportData.map((row, idx) => {
-                  const idValue = row['ID Transaksi'] || row['Material ID'] || '';
+                  const idValue = row['ID Transaksi'] || row['No SJ'] || row['Nomor DO / SJ'] || row['Nomor DO/SJ'] || row['Material ID'] || '';
                   
                   return (
                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
                       {Object.values(row).map((val: any, colIdx) => (
-                        <td key={colIdx} className="p-3 text-slate-800">
+                        <td key={colIdx} className="p-3 text-slate-800 whitespace-pre-line text-xs">
                           {String(val)}
                         </td>
                       ))}
-                      {isAdmin && (
-                        <td className="p-3 text-right">
+                      <td className="p-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center space-x-1.5">
+                          {activeReport === 'outbound' && (
+                            (() => {
+                              const outboundItem = outboundHeaders.find(o => o.id === idValue || o.nomorDOSJ === idValue);
+                              if (!outboundItem) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => generateSuratJalanPDF(outboundItem, appLogoUrl)}
+                                  className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-all cursor-pointer inline-flex items-center space-x-1 shadow-xs"
+                                  title="Print PDF Surat Jalan"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                  <span>PDF</span>
+                                </button>
+                              );
+                            })()
+                          )}
                           <button
                             type="button"
                             onClick={() => idValue && setDeleteConfirm({ id: idValue, type: activeReport, label: idValue })}
-                            className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-all cursor-pointer inline-flex items-center"
-                            title="Hapus Data Ini (Aksi Admin)"
+                            className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-semibold transition-all cursor-pointer inline-flex items-center space-x-1"
+                            title="Hapus Transaksi"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Hapus</span>
                           </button>
-                        </td>
-                      )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
