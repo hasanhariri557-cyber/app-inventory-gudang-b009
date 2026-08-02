@@ -156,7 +156,7 @@ export const IncomingView: React.FC = () => {
     if (isQrModalOpen) {
       const generateQr = async () => {
         try {
-          const url = `${window.location.origin}/driver-checkin`;
+          const url = `${window.location.origin}/#/driver-checkin`;
           const dataUrl = await QRCode.toDataURL(url, {
             width: 320, // 320px x 320px for high visibility
             margin: 4, // 4 modules padding = very clear quiet zone
@@ -1187,7 +1187,7 @@ export const IncomingView: React.FC = () => {
               
               <p className="text-xs font-bold text-indigo-700 uppercase tracking-widest my-1">SCAN ME / PINDAI SAYA</p>
               <div className="mt-2 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-[11px] font-mono select-all break-all w-full text-center font-bold">
-                {window.location.origin}/driver-checkin
+                {window.location.origin}/#/driver-checkin
               </div>
               <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
                 Tempel poster ini di pos penjagaan gerbang masuk agar supir dapat melakukan pendaftaran antrean secara mandiri melalui smartphone.
@@ -1223,7 +1223,7 @@ export const IncomingView: React.FC = () => {
                                 <img src="${qrCodeDataUrl}" width="300" height="300" style="display: block; image-rendering: pixelated;" />
                               </div>
                               <div class="scan-me">SCAN ME / PINDAI SAYA</div>
-                              <div class="url">${window.location.origin}/driver-checkin</div>
+                              <div class="url">${window.location.origin}/#/driver-checkin</div>
                             </div>
                           </body>
                         </html>
