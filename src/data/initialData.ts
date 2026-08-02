@@ -195,6 +195,12 @@ export const INITIAL_FORKLIFT_ACTIVITY_TYPES: MasterSettingItem[] = [
   { id: 'FAT-03', nama: 'Muat (Loading)' }
 ];
 
+export const INITIAL_JENIS_BARANG_OPTIONS: MasterSettingItem[] = [
+  { id: 'JB-1', nama: 'Rawmat' },
+  { id: 'JB-2', nama: 'Karton' },
+  { id: 'JB-3', nama: 'Packaging' }
+];
+
 const today = new Date().toISOString().split('T')[0];
 
 export const INITIAL_INCOMING: IncomingHeader[] = [];

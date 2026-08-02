@@ -224,7 +224,9 @@ export interface DriverQueueItem {
   platNomor: string;
   namaSupir: string;
   namaVendor: string;
-  noPoSJ: string;
+  noPoSJ?: string;
+  noHp: string;
+  jenisBarang: string;
   status: 'Menunggu' | 'Dipanggil' | 'Bongkar Muat' | 'Selesai';
   tanggalDaftar: string;
   waktuStatus: string;

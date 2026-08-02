@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowDownLeft, Plus, Trash2, CheckCircle2, AlertTriangle, XCircle, Search, Layers, FileText, ChevronDown, Check, Pencil, QrCode, Volume2, Play, CheckSquare, Clock, Truck } from 'lucide-react';
+import { ArrowDownLeft, Plus, Trash2, CheckCircle2, AlertTriangle, XCircle, Search, Layers, FileText, ChevronDown, Check, Pencil, QrCode, Volume2, Play, CheckSquare, Clock, Truck, Download } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import QRCode from 'qrcode';
 import { IncomingDetail, IncomingHeader, Material } from '../types';
 import { calculatePalletCount, getUppPalletForMaterial } from '../utils/palletUtils';
+import { exportToExcel } from '../utils/exportUtils';
 
 interface MaterialSearchSelectProps {
   selectedId: string;
@@ -135,6 +136,76 @@ export const IncomingView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'receiving' | 'queue'>('receiving');
   const [activityFilter, setActivityFilter] = useState<'Semua' | 'Bongkar' | 'Muat'>('Semua');
+  const [dateFilter, setDateFilter] = useState<string>(() => {
+    try {
+      return new Date().toLocaleDateString('en-CA');
+    } catch (e) {
+      return new Date().toISOString().split('T')[0];
+    }
+  });
+  const [jenisBarangFilter, setJenisBarangFilter] = useState<string>('');
+  const [timeTick, setTimeTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimeTick((prev) => prev + 1);
+    }, 30000); // 30 seconds interval to auto-refresh WAKTU TERDAFTAR
+    return () => clearInterval(interval);
+  }, []);
+
+  const getWaitingTimeText = (tanggalDaftar: any) => {
+    if (!tanggalDaftar) return '-';
+    let dateVal: Date;
+    if (typeof tanggalDaftar.toDate === 'function') {
+      dateVal = tanggalDaftar.toDate();
+    } else if (tanggalDaftar && typeof tanggalDaftar === 'object' && tanggalDaftar.seconds) {
+      dateVal = new Date(tanggalDaftar.seconds * 1000);
+    } else {
+      dateVal = new Date(tanggalDaftar);
+    }
+    
+    const diffMs = Date.now() - dateVal.getTime();
+    if (isNaN(dateVal.getTime())) return 'Baru saja';
+    if (diffMs < 0) return 'Baru saja';
+    
+    const totalMinutes = Math.floor(diffMs / 60000);
+    if (totalMinutes < 1) return 'Baru saja';
+    if (totalMinutes < 60) return `${totalMinutes} mnt lalu`;
+    
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    if (mins === 0) {
+      return `${hours} jam lalu`;
+    }
+    return `${hours} jam ${mins} mnt lalu`;
+  };
+
+  const handleExportExcel = () => {
+    const dataToExport = filteredQueues.map((item, index) => {
+      let formattedDate = '';
+      try {
+        formattedDate = new Date(item.tanggalDaftar).toLocaleString('id-ID');
+      } catch (e) {
+        formattedDate = item.tanggalDaftar;
+      }
+
+      return {
+        'No.': index + 1,
+        'No. Antrean': item.noAntrian || '',
+        'Tanggal Daftar': formattedDate,
+        'Plat Nomor': item.platNomor || '',
+        'Nama Supir': item.namaSupir || '',
+        'Nama Vendor': item.namaVendor || '',
+        'No. HP / WhatsApp': item.noHp || '',
+        'Jenis Barang': item.jenisBarang || '',
+        'Aktivitas': item.aktivitas || 'Bongkar',
+        'Status': item.status || 'Menunggu',
+      };
+    });
+
+    const filename = `Antrean_Gate_Docking_${dateFilter || 'Semua_Tanggal'}`;
+    exportToExcel(dataToExport, filename, 'Antrean');
+  };
 
   const currentTab = currentUser?.role === 'Security' ? 'queue' : activeTab;
 
@@ -147,9 +218,22 @@ export const IncomingView: React.FC = () => {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
 
   const filteredQueues = driverQueues.filter((item) => {
-    if (activityFilter === 'Semua') return true;
-    const act = item.aktivitas || 'Bongkar';
-    return act === activityFilter;
+    if (activityFilter !== 'Semua') {
+      const act = item.aktivitas || 'Bongkar';
+      if (act !== activityFilter) return false;
+    }
+    
+    if (dateFilter) {
+      const itemDate = item.tanggalDaftar ? item.tanggalDaftar.split('T')[0] : '';
+      if (itemDate !== dateFilter) return false;
+    }
+
+    if (jenisBarangFilter.trim() !== '') {
+      const itemJenis = (item.jenisBarang || '').toLowerCase();
+      if (!itemJenis.includes(jenisBarangFilter.toLowerCase())) return false;
+    }
+
+    return true;
   });
 
   useEffect(() => {
@@ -185,8 +269,8 @@ export const IncomingView: React.FC = () => {
   useEffect(() => {
     if (activeAutofillDriver) {
       setVendor(activeAutofillDriver.namaVendor);
-      setNomorPO(activeAutofillDriver.noPoSJ);
-      setNoSuratJalan(activeAutofillDriver.noPoSJ);
+      setNomorPO(activeAutofillDriver.noPoSJ || '');
+      setNoSuratJalan(activeAutofillDriver.noPoSJ || '');
       setPlatKendaraan(activeAutofillDriver.platNomor);
       
       setIsFormOpen(true);
@@ -675,10 +759,10 @@ export const IncomingView: React.FC = () => {
                         <td className="p-3.5 text-center">
                           <button
                             type="button"
-                            disabled={currentUser?.role !== 'Admin'}
+                            disabled={currentUser?.role?.toLowerCase() !== 'admin'}
                             onClick={() => handleDelete(h.id, h.noReceiving)}
                             className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 hover:border-rose-300 transition-all cursor-pointer inline-flex items-center disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={currentUser?.role !== 'Admin' ? 'Otoritas khusus Admin' : 'Hapus Transaksi'}
+                            title={currentUser?.role?.toLowerCase() !== 'admin' ? 'Otoritas khusus Admin' : 'Hapus Transaksi'}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -739,56 +823,115 @@ export const IncomingView: React.FC = () => {
       </div>
 
       {/* Queue Control Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h3 className="font-bold text-slate-900 text-sm">Dashboard Logistik Yard & Docking</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Pantau, panggil, dan proses antrean pengemudi logistik di pos depan secara real-time.</p>
-        </div>
-        
-        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
-          {/* Filter Aktivitas */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-[11px] font-semibold">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h3 className="font-bold text-slate-900 text-sm">Dashboard Logistik Yard & Docking</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Pantau, panggil, dan proses antrean pengemudi logistik di pos depan secara real-time.</p>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto shrink-0">
             <button
-              onClick={() => setActivityFilter('Semua')}
-              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activityFilter === 'Semua'
-                  ? 'bg-white text-slate-950 shadow-xs font-bold'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
+              onClick={handleExportExcel}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
             >
-              Semua
+              <Download className="w-4 h-4" />
+              Ekspor Excel (.xlsx)
             </button>
             <button
-              onClick={() => setActivityFilter('Bongkar')}
-              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                activityFilter === 'Bongkar'
-                  ? 'bg-emerald-600 text-white shadow-xs font-bold'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
+              onClick={() => setIsQrModalOpen(true)}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${activityFilter === 'Bongkar' ? 'bg-white' : 'bg-emerald-500'}`}></span>
-              Hanya Bongkar
-            </button>
-            <button
-              onClick={() => setActivityFilter('Muat')}
-              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                activityFilter === 'Muat'
-                  ? 'bg-purple-600 text-white shadow-xs font-bold'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${activityFilter === 'Muat' ? 'bg-white' : 'bg-purple-500'}`}></span>
-              Hanya Muat
+              <QrCode className="w-4 h-4 text-indigo-400" />
+              Tampilkan QR Gate
             </button>
           </div>
+        </div>
 
-          <button
-            onClick={() => setIsQrModalOpen(true)}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer shrink-0"
-          >
-            <QrCode className="w-4 h-4 text-indigo-400" />
-            Tampilkan QR Gate
-          </button>
+        {/* Filters Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
+          {/* Filter Aktivitas */}
+          <div className="space-y-1.5">
+            <span className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider">Aktivitas</span>
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-[11px] font-semibold">
+              <button
+                onClick={() => setActivityFilter('Semua')}
+                className={`flex-1 text-center py-1.5 rounded-lg transition-all cursor-pointer ${
+                  activityFilter === 'Semua'
+                    ? 'bg-white text-slate-950 shadow-2xs font-bold'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Semua
+              </button>
+              <button
+                onClick={() => setActivityFilter('Bongkar')}
+                className={`flex-1 text-center py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  activityFilter === 'Bongkar'
+                    ? 'bg-emerald-600 text-white shadow-2xs font-bold'
+                    : 'text-slate-500 hover:text-slate-850'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${activityFilter === 'Bongkar' ? 'bg-white' : 'bg-emerald-500'}`}></span>
+                Bongkar
+              </button>
+              <button
+                onClick={() => setActivityFilter('Muat')}
+                className={`flex-1 text-center py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  activityFilter === 'Muat'
+                    ? 'bg-purple-600 text-white shadow-2xs font-bold'
+                    : 'text-slate-500 hover:text-slate-850'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${activityFilter === 'Muat' ? 'bg-white' : 'bg-purple-500'}`}></span>
+                Muat
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Tanggal */}
+          <div className="space-y-1.5">
+            <span className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider">Tanggal Antrean</span>
+            <div className="relative flex items-center">
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+              {dateFilter && (
+                <button
+                  onClick={() => setDateFilter('')}
+                  className="absolute right-8 text-slate-400 hover:text-red-500 text-xs font-bold cursor-pointer bg-slate-100 rounded-full w-5 h-5 flex items-center justify-center border border-slate-200"
+                  title="Clear Date"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Filter Jenis Barang */}
+          <div className="space-y-1.5">
+            <span className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider">Jenis Barang Bawaan</span>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Cari jenis barang (e.g. Pallet, Karton)..."
+                value={jenisBarangFilter}
+                onChange={(e) => setJenisBarangFilter(e.target.value)}
+                className="w-full pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              {jenisBarangFilter && (
+                <button
+                  onClick={() => setJenisBarangFilter('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 text-xs font-bold cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -803,7 +946,8 @@ export const IncomingView: React.FC = () => {
                 <th className="p-3.5">Plat Nomor</th>
                 <th className="p-3.5">Nama Supir</th>
                 <th className="p-3.5">Nama Vendor</th>
-                <th className="p-3.5">PO / Surat Jalan</th>
+                <th className="p-3.5">No HP</th>
+                <th className="p-3.5">Jenis Barang</th>
                 <th className="p-3.5">Aktivitas</th>
                 <th className="p-3.5">Status</th>
                 <th className="p-3.5 text-right">Aksi Otoritas</th>
@@ -812,15 +956,14 @@ export const IncomingView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredQueues.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
+                  <td colSpan={10} className="p-8 text-center text-slate-400 font-medium">
                     <Truck className="w-10 h-10 mx-auto text-slate-300 mb-2 animate-bounce" />
                     Belum ada antrean driver aktif terdaftar dengan kriteria ini.
                   </td>
                 </tr>
               ) : (
                 filteredQueues.map((item) => {
-                  const waitingMins = Math.round((Date.now() - new Date(item.tanggalDaftar).getTime()) / 60000);
-                  const waitingTimeText = waitingMins < 1 ? 'Baru saja' : `${waitingMins} mnt lalu`;
+                  const waitingTimeText = getWaitingTimeText(item.tanggalDaftar);
                   const act = item.aktivitas || 'Bongkar';
                   
                   return (
@@ -835,7 +978,8 @@ export const IncomingView: React.FC = () => {
                       <td className="p-3.5 font-bold uppercase text-slate-900">{item.platNomor}</td>
                       <td className="p-3.5 font-semibold text-slate-800">{item.namaSupir}</td>
                       <td className="p-3.5 text-slate-700 font-medium">{item.namaVendor}</td>
-                      <td className="p-3.5 text-slate-600 font-mono font-bold text-[11px]">{item.noPoSJ}</td>
+                      <td className="p-3.5 text-slate-600 font-medium text-xs font-mono">{item.noHp}</td>
+                      <td className="p-3.5 text-slate-650 font-medium text-xs">{item.jenisBarang}</td>
                       <td className="p-3.5">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                           act === 'Muat'
@@ -888,14 +1032,14 @@ export const IncomingView: React.FC = () => {
                         )}
                         <button
                           type="button"
-                          disabled={currentUser?.role !== 'Admin'}
+                          disabled={currentUser?.role?.toLowerCase() !== 'admin'}
                           onClick={() => {
-                            if (window.confirm('Hapus antrean pengemudi ini?')) {
+                            if (window.confirm('Apakah Anda yakin ingin menghapus antrean pengemudi ini?')) {
                               deleteDriverQueue(item.id);
                             }
                           }}
                           className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 hover:border-rose-300 transition-all cursor-pointer inline-flex items-center disabled:opacity-30 disabled:cursor-not-allowed"
-                          title={currentUser?.role !== 'Admin' ? "Otoritas khusus Admin" : "Hapus Antrean"}
+                          title={currentUser?.role?.toLowerCase() !== 'admin' ? "Otoritas khusus Admin" : "Hapus Antrean"}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

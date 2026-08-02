@@ -87,6 +87,9 @@ export const SettingView: React.FC = () => {
     addZone,
     updateZone,
     deleteZone,
+    jenisBarangOptions,
+    addJenisBarangOption,
+    deleteJenisBarangOption,
     updateRolePermission,
     updateAdminAuthority,
     updateMenuConfig,
@@ -529,6 +532,7 @@ export const SettingView: React.FC = () => {
   const [unitName, setUnitName] = useState('');
 
   const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
+  const [newJenisBarang, setNewJenisBarang] = useState('');
   const [editingZone, setEditingZone] = useState<MasterSettingItem | null>(null);
   const [deletingZone, setDeletingZone] = useState<MasterSettingItem | null>(null);
   const [zoneName, setZoneName] = useState('');
@@ -2364,7 +2368,7 @@ export const SettingView: React.FC = () => {
 
       {/* TAB 7: MASTER KATEGORI, SATUAN & ZONA GUDANG */}
       {activeTab === 'master' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Kategori Material */}
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
             <div className="flex items-center justify-between">
@@ -2527,6 +2531,70 @@ export const SettingView: React.FC = () => {
               ))}
             </div>
           </div>
+
+          {/* Jenis Barang Bawaan Supir */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
+            <div className="flex flex-col space-y-1">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Jenis Barang Bawaan</h3>
+              <p className="text-[11px] text-slate-500">{(jenisBarangOptions || []).length} opsi terdaftar</p>
+            </div>
+
+            {currentUser.role === 'Admin' ? (
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newJenisBarang.trim()) return;
+                  addJenisBarangOption({ nama: newJenisBarang.trim() });
+                  setNewJenisBarang('');
+                }}
+                className="flex items-center space-x-2"
+              >
+                <input
+                  type="text"
+                  placeholder="Tambah jenis barang baru..."
+                  value={newJenisBarang}
+                  onChange={(e) => setNewJenisBarang(e.target.value)}
+                  className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-indigo-500 w-full font-medium"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all flex items-center shrink-0 cursor-pointer"
+                  title="Tambah Opsi"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </form>
+            ) : (
+              <div className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 p-2 rounded-xl">
+                Opsi manajemen hanya tersedia untuk Admin.
+              </div>
+            )}
+
+            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+              {(jenisBarangOptions || []).map(opt => (
+                <div key={opt.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-semibold text-slate-700">
+                  <span>{opt.nama}</span>
+                  {currentUser.role === 'Admin' && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Apakah Anda yakin ingin menghapus "${opt.nama}" dari pilihan jenis barang?`)) {
+                          deleteJenisBarangOption(opt.id);
+                        }
+                      }}
+                      className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 transition-all cursor-pointer"
+                      title="Hapus Jenis Barang"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {(jenisBarangOptions || []).length === 0 && (
+                <p className="text-center text-xs text-slate-400 py-4">Belum ada data opsi.</p>
+              )}
+            </div>
+          </div>
+
         </div>
       )}
 

@@ -41,7 +41,8 @@ import {
   INITIAL_ROLE_PERMISSIONS,
   INITIAL_ADMIN_AUTHORITIES,
   INITIAL_MENU_CONFIGS,
-  INITIAL_FORKLIFT_ACTIVITIES
+  INITIAL_FORKLIFT_ACTIVITIES,
+  INITIAL_JENIS_BARANG_OPTIONS
 } from '../data/initialData';
 import { 
   saveToFirestore, 
@@ -83,6 +84,7 @@ interface WmsContextType {
   zones: MasterSettingItem[];
   forkliftUnits: MasterSettingItem[];
   forkliftActivityTypes: MasterSettingItem[];
+  jenisBarangOptions: MasterSettingItem[];
   
   firebaseSyncStatus: 'loading' | 'synced' | 'error' | 'offline';
 
@@ -164,6 +166,8 @@ interface WmsContextType {
   addForkliftActivityType: (a: Omit<MasterSettingItem, 'id'>) => void;
   updateForkliftActivityType: (id: string, a: Partial<MasterSettingItem>) => void;
   deleteForkliftActivityType: (id: string) => void;
+  addJenisBarangOption: (o: Omit<MasterSettingItem, 'id'>) => void;
+  deleteJenisBarangOption: (id: string) => void;
   
   deleteIncoming: (id: string) => Promise<void>;
   deleteOutbound: (id: string) => Promise<void>;
@@ -189,7 +193,7 @@ interface WmsContextType {
   setActiveAutofillDriver: (driver: DriverQueueItem | null) => void;
   activeMenu: MenuKey;
   setActiveMenu: (menu: MenuKey) => void;
-  registerDriverQueue: (driver: { platNomor: string; namaSupir: string; namaVendor: string; noPoSJ: string; aktivitas?: 'Bongkar' | 'Muat' }) => Promise<string>;
+  registerDriverQueue: (driver: { platNomor: string; namaSupir: string; namaVendor: string; noPoSJ?: string; noHp: string; jenisBarang: string; aktivitas?: 'Bongkar' | 'Muat' }) => Promise<string>;
   updateDriverQueueStatus: (id: string, status: DriverQueueItem['status']) => Promise<void>;
   deleteDriverQueue: (id: string) => Promise<void>;
 
@@ -355,6 +359,22 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_FORKLIFT_ACTIVITY_TYPES;
   });
 
+  const [jenisBarangOptions, setJenisBarangOptions] = useState<MasterSettingItem[]>(() => {
+    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_jenis_barang_options`);
+    if (!saved) return INITIAL_JENIS_BARANG_OPTIONS;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const existingIds = new Set(parsed.map((j: MasterSettingItem) => j.id));
+        const missing = INITIAL_JENIS_BARANG_OPTIONS.filter(j => !existingIds.has(j.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_JENIS_BARANG_OPTIONS;
+    } catch {
+      return INITIAL_JENIS_BARANG_OPTIONS;
+    }
+  });
+
   const addForkliftUnit = (u: Omit<MasterSettingItem, 'id'>) => {
     setForkliftUnits(prev => [...prev, { ...u, id: `FU-${Date.now()}` }]);
   };
@@ -479,6 +499,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const lastCloudStrings = React.useRef<{ [key: string]: string }>({});
   const unsubscribersRef = React.useRef<(() => void)[]>([]);
+  const recentlyDeletedIdsRef = React.useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const loadAllFromCloud = async () => {
@@ -500,6 +521,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const cloudCategories = await loadCollectionFromFirestore('categories');
         const cloudUnits = await loadCollectionFromFirestore('units');
         const cloudZones = await loadCollectionFromFirestore('zones');
+        const cloudJenisBarang = await loadCollectionFromFirestore('jenisBarangOptions');
         const cloudAuditLogs = await loadCollectionFromFirestore('auditLogs');
         const cloudPermissions = await loadCollectionFromFirestore('rolePermissions');
         const cloudAdminAuth = await loadCollectionFromFirestore('adminAuthorities');
@@ -524,6 +546,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           await syncCollectionToFirestore('categories', categories);
           await syncCollectionToFirestore('units', units);
           await syncCollectionToFirestore('zones', zones);
+          await syncCollectionToFirestore('jenisBarangOptions', jenisBarangOptions);
           
           await saveToFirestore('rolePermissions', 'v1', rolePermissions);
           await saveToFirestore('adminAuthorities', 'v1', adminAuthorities);
@@ -544,6 +567,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastCloudStrings.current['categories'] = JSON.stringify(categories);
           lastCloudStrings.current['units'] = JSON.stringify(units);
           lastCloudStrings.current['zones'] = JSON.stringify(zones);
+          lastCloudStrings.current['jenisBarangOptions'] = JSON.stringify(jenisBarangOptions);
           lastCloudStrings.current['rolePermissions'] = JSON.stringify(rolePermissions);
           lastCloudStrings.current['adminAuthorities'] = JSON.stringify(adminAuthorities);
           lastCloudStrings.current['menuConfigs'] = JSON.stringify(menuConfigs);
@@ -565,6 +589,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (cloudCategories.length > 0) setCategories(deduplicateById(cloudCategories));
           if (cloudUnits.length > 0) setUnits(deduplicateById(cloudUnits));
           if (cloudZones.length > 0) setZones(deduplicateById(cloudZones));
+          if (cloudJenisBarang.length > 0) setJenisBarangOptions(deduplicateById(cloudJenisBarang));
 
           lastCloudStrings.current['materials'] = JSON.stringify(cloudMaterials);
           lastCloudStrings.current['users'] = JSON.stringify(cloudUsers);
@@ -580,6 +605,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastCloudStrings.current['categories'] = JSON.stringify(cloudCategories);
           lastCloudStrings.current['units'] = JSON.stringify(cloudUnits);
           lastCloudStrings.current['zones'] = JSON.stringify(cloudZones);
+          lastCloudStrings.current['jenisBarangOptions'] = JSON.stringify(cloudJenisBarang);
 
           if (cloudPermissions.length > 0) {
             const permDoc = cloudPermissions.find(p => p.id === 'v1');
@@ -632,6 +658,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           { name: 'categories', setter: setCategories },
           { name: 'units', setter: setUnits },
           { name: 'zones', setter: setZones },
+          { name: 'jenisBarangOptions', setter: setJenisBarangOptions },
           { name: 'driverQueues', setter: setDriverQueues },
         ];
 
@@ -639,7 +666,9 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const unsub = onSnapshot(collection(db, name), (snapshot) => {
             const rawItems: any[] = [];
             snapshot.forEach((doc) => {
-              rawItems.push({ id: doc.id, ...doc.data() });
+              if (!recentlyDeletedIdsRef.current.has(doc.id)) {
+                rawItems.push({ id: doc.id, ...doc.data() });
+              }
             });
             const items = deduplicateById(rawItems);
             const itemsStr = JSON.stringify(items);
@@ -784,8 +813,9 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_categories`, JSON.stringify(categories));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_units`, JSON.stringify(units));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_zones`, JSON.stringify(zones));
+    localStorage.setItem(`${LOCAL_STORAGE_KEY}_jenis_barang_options`, JSON.stringify(jenisBarangOptions));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_driver_queues`, JSON.stringify(driverQueues));
-  }, [users, materials, gedungList, vendors, incomingHeaders, rejects, putAways, outboundHeaders, stockOpnames, mutasis, kartuStocks, forkliftActivities, rolePermissions, adminAuthorities, menuConfigs, categories, units, zones, driverQueues]);
+  }, [users, materials, gedungList, vendors, incomingHeaders, rejects, putAways, outboundHeaders, stockOpnames, mutasis, kartuStocks, forkliftActivities, rolePermissions, adminAuthorities, menuConfigs, categories, units, zones, jenisBarangOptions, driverQueues]);
 
   // Sync to Firestore on changes
   useEffect(() => {
@@ -913,6 +943,15 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     lastCloudStrings.current['zones'] = currentStr;
     syncCollectionIncrementally('zones', zones, oldStr);
   }, [zones, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
+    const currentStr = JSON.stringify(jenisBarangOptions);
+    const oldStr = lastCloudStrings.current['jenisBarangOptions'];
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['jenisBarangOptions'] = currentStr;
+    syncCollectionIncrementally('jenisBarangOptions', jenisBarangOptions, oldStr);
+  }, [jenisBarangOptions, firebaseSyncStatus]);
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
@@ -1150,12 +1189,13 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteMaterial = async (id: string) => {
+    recentlyDeletedIdsRef.current.add(id);
     setMaterials(prev => prev.filter(item => item.id !== id));
     await deleteFromFirestore('materials', id);
     showNotification('Data Material Dihapus', `Material ID ${id} telah dihapus dari sistem.`, 'info', 'Master Data Barang');
   };
 
-  const registerDriverQueue = async (driver: { platNomor: string; namaSupir: string; namaVendor: string; noPoSJ: string; aktivitas?: 'Bongkar' | 'Muat' }) => {
+  const registerDriverQueue = async (driver: { platNomor: string; namaSupir: string; namaVendor: string; noPoSJ?: string; noHp: string; jenisBarang: string; aktivitas?: 'Bongkar' | 'Muat' }) => {
     const todayStr = new Date().toISOString().split('T')[0];
     const todaysQueues = driverQueues.filter(q => q.tanggalDaftar.startsWith(todayStr));
     
@@ -1176,7 +1216,9 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       platNomor: driver.platNomor.toUpperCase(),
       namaSupir: driver.namaSupir,
       namaVendor: driver.namaVendor,
-      noPoSJ: driver.noPoSJ,
+      noPoSJ: driver.noPoSJ || '',
+      noHp: driver.noHp,
+      jenisBarang: driver.jenisBarang,
       status: 'Menunggu',
       tanggalDaftar: new Date().toISOString(),
       waktuStatus: new Date().toISOString(),
@@ -1203,6 +1245,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteDriverQueue = async (id: string) => {
+    recentlyDeletedIdsRef.current.add(id);
     setDriverQueues(prev => prev.filter(item => item.id !== id));
     await deleteFromFirestore('driverQueues', id);
     showNotification('Antrian Dihapus', `Antrian telah berhasil dihapus dari sistem.`, 'info', 'Antrian Gate & Docking');
@@ -1789,6 +1832,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     const targetUser = users.find(u => u.id === id);
+    recentlyDeletedIdsRef.current.add(id);
     setUsers(prev => prev.filter(u => u.id !== id));
     await deleteFromFirestore('users', id);
     showNotification('Pengguna Dihapus', `Akun pengguna ${targetUser?.nama || id} telah dihapus dari sistem.`, 'info', 'Master Pengguna');
@@ -1819,6 +1863,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteVendor = async (id: string) => {
     const targetVendor = vendors.find(v => v.id === id);
+    recentlyDeletedIdsRef.current.add(id);
     setVendors(prev => prev.filter(v => v.id !== id));
     await deleteFromFirestore('vendors', id);
     showNotification('Vendor Dihapus', `Master Vendor ${targetVendor?.namaVendor || id} berhasil dihapus.`, 'info', 'Master Vendor');
@@ -1838,6 +1883,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteGedung = async (id: string) => {
     const targetGedung = gedungList.find(g => g.id === id);
+    recentlyDeletedIdsRef.current.add(id);
     setGedungList(prev => prev.filter(g => g.id !== id));
     await deleteFromFirestore('gedungList', id);
     showNotification('Gedung Dihapus', `Master Gedung ${targetGedung?.nama || id} berhasil dihapus dari sistem.`, 'info', 'Layout Gudang');
@@ -1856,6 +1902,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteCategory = async (id: string) => {
     const target = categories.find(cat => cat.id === id);
+    recentlyDeletedIdsRef.current.add(id);
     setCategories(prev => prev.filter(item => item.id !== id));
     await deleteFromFirestore('categories', id);
     showNotification('Kategori Dihapus', `Kategori ${target?.nama || id} berhasil dihapus.`, 'info', 'Master Kategori');
@@ -1874,6 +1921,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteUnit = async (id: string) => {
     const target = units.find(item => item.id === id);
+    recentlyDeletedIdsRef.current.add(id);
     setUnits(prev => prev.filter(item => item.id !== id));
     await deleteFromFirestore('units', id);
     showNotification('Satuan Dihapus', `Satuan ${target?.nama || id} berhasil dihapus.`, 'info', 'Master Satuan');
@@ -1892,14 +1940,31 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteZone = async (id: string) => {
     const target = zones.find(item => item.id === id);
+    recentlyDeletedIdsRef.current.add(id);
     setZones(prev => prev.filter(item => item.id !== id));
     await deleteFromFirestore('zones', id);
     showNotification('Zona Gudang Dihapus', `Zona ${target?.nama || id} berhasil dihapus.`, 'info', 'Master Zona Gudang');
   };
 
+  const addJenisBarangOption = (o: Omit<MasterSettingItem, 'id'>) => {
+    const newOpt: MasterSettingItem = { ...o, id: `JB-${Date.now()}` };
+    setJenisBarangOptions(prev => [...prev, newOpt]);
+    showNotification('Jenis Barang Disimpan', `Jenis Barang ${o.nama} berhasil ditambahkan.`, 'success', 'Pengaturan Jenis Barang');
+  };
+
+  const deleteJenisBarangOption = async (id: string) => {
+    const target = jenisBarangOptions.find(item => item.id === id);
+    recentlyDeletedIdsRef.current.add(id);
+    setJenisBarangOptions(prev => prev.filter(item => item.id !== id));
+    await deleteFromFirestore('jenisBarangOptions', id);
+    showNotification('Jenis Barang Dihapus', `Jenis Barang ${target?.nama || id} berhasil dihapus.`, 'info', 'Pengaturan Jenis Barang');
+  };
+
   const deleteIncoming = async (id: string) => {
     const header = incomingHeaders.find(h => h.id === id);
     if (!header) return;
+
+    recentlyDeletedIdsRef.current.add(id);
 
     // 1. Revert stock of materials
     setMaterials(prev => prev.map(mat => {
@@ -1916,6 +1981,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 2. Remove related kartu stock entries
     const relatedKartu = kartuStocks.filter(ks => ks.refNo === header.noReceiving);
     for (const ks of relatedKartu) {
+      recentlyDeletedIdsRef.current.add(ks.id);
       await deleteFromFirestore('kartuStocks', ks.id);
     }
     setKartuStocks(prev => prev.filter(ks => ks.refNo !== header.noReceiving));
@@ -1923,6 +1989,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 3. Remove related rejects (if any)
     const relatedRejects = rejects.filter(r => r.poPembelian === header.nomorPO && r.vendor === header.vendor);
     for (const r of relatedRejects) {
+      recentlyDeletedIdsRef.current.add(r.id);
       await deleteFromFirestore('rejects', r.id);
     }
     setRejects(prev => prev.filter(r => !(r.poPembelian === header.nomorPO && r.vendor === header.vendor)));
@@ -1962,6 +2029,8 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const header = outboundHeaders.find(o => o.id === id);
     if (!header) return;
 
+    recentlyDeletedIdsRef.current.add(id);
+
     // 1. Revert stock of materials
     setMaterials(prev => prev.map(mat => {
       const matchedDetail = header.details.find(d => d.materialId === mat.id);
@@ -1977,6 +2046,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 2. Remove related kartu stock entries
     const relatedKartu = kartuStocks.filter(ks => ks.refNo === header.nomorDOSJ);
     for (const ks of relatedKartu) {
+      recentlyDeletedIdsRef.current.add(ks.id);
       await deleteFromFirestore('kartuStocks', ks.id);
     }
     setKartuStocks(prev => prev.filter(ks => ks.refNo !== header.nomorDOSJ));
@@ -1989,6 +2059,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteReject = async (id: string) => {
+    recentlyDeletedIdsRef.current.add(id);
     setRejects(prev => prev.filter(r => r.id !== id));
     await deleteFromFirestore('rejects', id);
     showNotification('Reject Dihapus', `Data Reject #${id} berhasil dihapus.`, 'info', 'Pusat Laporan');
@@ -1998,6 +2069,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const so = stockOpnames.find(s => s.id === id);
     if (!so) return;
 
+    recentlyDeletedIdsRef.current.add(id);
     setStockOpnames(prev => prev.filter(s => s.id !== id));
     await deleteFromFirestore('stockOpnames', id);
 
@@ -2005,6 +2077,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteKartuStock = async (id: string) => {
+    recentlyDeletedIdsRef.current.add(id);
     setKartuStocks(prev => prev.filter(ks => ks.id !== id));
     await deleteFromFirestore('kartuStocks', id);
     showNotification('Kartu Stock Dihapus', `Entry Kartu Stock #${id} berhasil dihapus.`, 'info', 'Pusat Laporan');
@@ -2169,6 +2242,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCategories(INITIAL_CATEGORIES);
     setUnits(INITIAL_UNITS);
     setZones(INITIAL_ZONES);
+    setJenisBarangOptions(INITIAL_JENIS_BARANG_OPTIONS);
     setIncomingHeaders(INITIAL_INCOMING);
     setRejects(INITIAL_REJECTS);
     setPutAways(INITIAL_PUTAWAY);
@@ -2207,6 +2281,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       categories,
       units,
       zones,
+      jenisBarangOptions,
       forkliftUnits,
       forkliftActivityTypes,
       rolePermissions,
@@ -2252,6 +2327,8 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addZone,
       updateZone,
       deleteZone,
+      addJenisBarangOption,
+      deleteJenisBarangOption,
       addForkliftUnit,
       updateForkliftUnit,
       deleteForkliftUnit,

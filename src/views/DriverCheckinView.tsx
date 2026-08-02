@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useWms } from '../context/WmsContext';
 import { DriverQueueItem } from '../types';
-import { Truck, CheckCircle2, RefreshCw, ClipboardList, User, ShieldCheck, ArrowRight, LogOut, Navigation } from 'lucide-react';
+import { Truck, CheckCircle2, RefreshCw, ClipboardList, User, ShieldCheck, ArrowRight, LogOut, Navigation, Phone, Package } from 'lucide-react';
 
 export const DriverCheckinView: React.FC = () => {
-  const { driverQueues, registerDriverQueue, appTitle } = useWms();
+  const { driverQueues, registerDriverQueue, appTitle, jenisBarangOptions } = useWms();
 
   // Active registration session stored in localStorage to persist on refresh
   const [activeQueueId, setActiveQueueId] = useState<string | null>(() => {
@@ -15,7 +15,9 @@ export const DriverCheckinView: React.FC = () => {
   const [platNomor, setPlatNomor] = useState('');
   const [namaSupir, setNamaSupir] = useState('');
   const [namaVendor, setNamaVendor] = useState('');
-  const [noPoSJ, setNoPoSJ] = useState('');
+  const [noHp, setNoHp] = useState('');
+  const [jenisBarang, setJenisBarang] = useState('');
+  const [customJenisBarang, setCustomJenisBarang] = useState('');
   const [aktivitas, setAktivitas] = useState<'Bongkar' | 'Muat'>('Bongkar');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,7 +45,9 @@ export const DriverCheckinView: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!platNomor.trim() || !namaSupir.trim() || !namaVendor.trim() || !noPoSJ.trim()) {
+    const finalJenisBarang = jenisBarang === 'Lainnya' ? customJenisBarang : jenisBarang;
+
+    if (!platNomor.trim() || !namaSupir.trim() || !namaVendor.trim() || !noHp.trim() || !finalJenisBarang.trim()) {
       setErrorMessage('Semua kolom pendaftaran wajib diisi secara lengkap.');
       return;
     }
@@ -68,7 +72,8 @@ export const DriverCheckinView: React.FC = () => {
         platNomor: platNomor.toUpperCase(),
         namaSupir,
         namaVendor,
-        noPoSJ,
+        noHp,
+        jenisBarang: finalJenisBarang,
         aktivitas
       });
 
@@ -88,7 +93,9 @@ export const DriverCheckinView: React.FC = () => {
       setPlatNomor('');
       setNamaSupir('');
       setNamaVendor('');
-      setNoPoSJ('');
+      setNoHp('');
+      setJenisBarang('');
+      setCustomJenisBarang('');
       setAktivitas('Bongkar');
     } catch (err) {
       setErrorMessage('Gagal mendaftarkan antrean. Silakan coba beberapa saat lagi.');
@@ -243,24 +250,66 @@ export const DriverCheckinView: React.FC = () => {
                 </div>
               </div>
 
-              {/* No PO / Surat Jalan */}
+              {/* No HP */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  {aktivitas === 'Muat' ? 'Nomor DO / Surat Jalan Pengiriman' : 'Nomor PO / Surat Jalan'}
-                </label>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">No. HP / WhatsApp</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <ClipboardList className="w-4 h-4" />
+                    <Phone className="w-4 h-4" />
                   </div>
                   <input
-                    type="text"
+                    type="tel"
                     required
-                    placeholder={aktivitas === 'Muat' ? 'Contoh: DO-2026-889' : 'Contoh: PO-2026-009'}
-                    value={noPoSJ}
-                    onChange={(e) => setNoPoSJ(e.target.value)}
+                    placeholder="Contoh: 081234567890"
+                    value={noHp}
+                    onChange={(e) => setNoHp(e.target.value)}
                     className="block w-full pl-11 pr-4 py-3.5 bg-slate-800/80 border border-slate-750 rounded-2xl text-white placeholder-slate-500 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
                   />
                 </div>
+              </div>
+
+              {/* Jenis Barang */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">Jenis Barang Bawaan</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                    <Package className="w-4 h-4" />
+                  </div>
+                  <select
+                    required
+                    value={jenisBarang}
+                    onChange={(e) => {
+                      setJenisBarang(e.target.value);
+                      if (e.target.value !== 'Lainnya') {
+                        setCustomJenisBarang('');
+                      }
+                    }}
+                    className="block w-full pl-11 pr-10 py-3.5 bg-slate-800/80 border border-slate-750 rounded-2xl text-white placeholder-slate-500 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled className="text-slate-500">-- Pilih Jenis Barang --</option>
+                    {(jenisBarangOptions || []).map(opt => (
+                      <option key={opt.id} value={opt.nama} className="text-white bg-slate-800">{opt.nama}</option>
+                    ))}
+                    <option value="Lainnya" className="text-white bg-slate-800">Lainnya (Ketik Manual)...</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-500">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                  </div>
+                </div>
+
+                {jenisBarang === 'Lainnya' && (
+                  <div className="mt-2.5 space-y-1 animate-fadeIn">
+                    <label className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Ketik Jenis Barang Manual</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Pallet Kayu, Roll Film, dll."
+                      value={customJenisBarang}
+                      onChange={(e) => setCustomJenisBarang(e.target.value)}
+                      className="block w-full px-4 py-3 bg-slate-800/80 border border-indigo-500/50 rounded-2xl text-white placeholder-slate-500 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Submit Button */}
@@ -348,8 +397,12 @@ export const DriverCheckinView: React.FC = () => {
                     <span className="font-bold text-white truncate block">{activeQueueItem.namaVendor}</span>
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-450 uppercase font-semibold">No. PO / Surat Jalan</span>
-                    <span className="font-bold text-white truncate block">{activeQueueItem.noPoSJ}</span>
+                    <span className="block text-[10px] text-slate-450 uppercase font-semibold">No. HP</span>
+                    <span className="font-bold text-white truncate block">{activeQueueItem.noHp}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-450 uppercase font-semibold">Jenis Barang</span>
+                    <span className="font-bold text-white truncate block">{activeQueueItem.jenisBarang}</span>
                   </div>
                 </div>
 
