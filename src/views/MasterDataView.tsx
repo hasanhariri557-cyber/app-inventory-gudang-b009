@@ -29,7 +29,7 @@ export const MasterDataView: React.FC = () => {
 
   // Quick Edit Lokasi Modal State
   const [quickEditMat, setQuickEditMat] = useState<Material | null>(null);
-  const [quickAllocations, setQuickAllocations] = useState<Record<string, number>>({});
+  const [quickAllocations, setQuickAllocations] = useState<Record<string, string | number>>({});
   const [quickDefaultLoc, setQuickDefaultLoc] = useState<string>('Gedung A1');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -45,7 +45,7 @@ export const MasterDataView: React.FC = () => {
   const [statusAktif, setStatusAktif] = useState(true);
   const [currentStock, setCurrentStock] = useState<string>('0');
   const [uppPallet, setUppPallet] = useState<string>('1000');
-  const [modalAllocations, setModalAllocations] = useState<Record<string, number>>({});
+  const [modalAllocations, setModalAllocations] = useState<Record<string, string | number>>({});
 
   const openCreateModal = () => {
     setEditingMaterial(null);
@@ -306,6 +306,7 @@ export const MasterDataView: React.FC = () => {
                 <th className="p-3.5">Nama Barang</th>
                 <th className="p-3.5">Kategori</th>
                 <th className="p-3.5">Satuan</th>
+                <th className="p-3.5">Gedung</th>
                 <th className="p-3.5">UPP Pallet</th>
                 <th className="p-3.5">Stok Sistem</th>
                 <th className="p-3.5">Status Aktif</th>
@@ -315,90 +316,94 @@ export const MasterDataView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredMaterials.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={9} className="p-8 text-center text-slate-400 italic">
                     Tidak ada data material ditemukan.
                   </td>
                 </tr>
               ) : (
-                filteredMaterials.map((m, idx) => (
-                  <tr key={`${m.id}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-3.5 font-mono font-bold text-indigo-600">{m.id}</td>
-                    <td className="p-3.5 font-semibold text-slate-900">{m.namaBarang}</td>
-                    <td className="p-3.5">
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-200 font-medium text-[11px]">
-                        {m.kategori}
-                      </span>
-                    </td>
-                    <td className="p-3.5 text-slate-500">{m.satuan}</td>
-                    <td className="p-3.5 font-semibold text-indigo-700 font-mono text-[11px]">
-                      <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded-md">
-                        {m.uppPallet || 1000} {m.satuan}/Pallet
-                      </span>
-                    </td>
-                    <td className="p-3.5 font-bold text-slate-900">
-                      <span className={`px-2 py-0.5 rounded ${
-                        m.currentStock <= m.minStock ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      }`}>
-                        {m.currentStock.toLocaleString('id-ID')} {m.satuan}
-                      </span>
-                      {(() => {
-                        const bStocks = getMaterialStockByGedung(m.id);
-                        const activeBuildings = Object.entries(bStocks).filter(([_, qty]) => (qty as number) > 0);
-                        if (activeBuildings.length === 0) return null;
-                        return (
-                          <div className="flex flex-wrap gap-1 mt-1.5">
-                            {activeBuildings.map(([bName, qty]) => (
+                filteredMaterials.map((m, idx) => {
+                  const bStocks = getMaterialStockByGedung(m.id);
+                  const activeBuildings = Object.entries(bStocks).filter(([_, qty]) => (qty as number) > 0);
+
+                  return (
+                    <tr key={`${m.id}-${idx}`} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-3.5 font-mono font-bold text-indigo-600">{m.id}</td>
+                      <td className="p-3.5 font-semibold text-slate-900">{m.namaBarang}</td>
+                      <td className="p-3.5">
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-200 font-medium text-[11px]">
+                          {m.kategori}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-slate-500">{m.satuan}</td>
+                      <td className="p-3.5">
+                        <div className="flex flex-wrap gap-1 max-w-[200px]">
+                          {activeBuildings.length > 0 ? (
+                            activeBuildings.map(([bName, qty]) => (
                               <span key={bName} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-medium border border-slate-200" title={`Stok di ${bName}`}>
                                 <MapPin className="w-2.5 h-2.5 text-indigo-500" />
                                 <span>{bName}: <strong>{(qty as number).toLocaleString('id-ID')}</strong></span>
                               </span>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="p-3.5">
-                      {m.statusAktif ? (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-bold">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Aktif</span>
+                            ))
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">Belum Teralokasi</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3.5 font-semibold text-indigo-700 font-mono text-[11px]">
+                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded-md">
+                          {m.uppPallet || 1000} {m.satuan}/Pallet
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-full text-[10px]">
-                          <XCircle className="w-3 h-3" />
-                          <span>Non-Aktif</span>
+                      </td>
+                      <td className="p-3.5 font-bold text-slate-900">
+                        <span className={`px-2 py-0.5 rounded ${
+                          m.currentStock <= m.minStock ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        }`}>
+                          {m.currentStock.toLocaleString('id-ID')} {m.satuan}
                         </span>
-                      )}
-                    </td>
-                    <td className="p-3.5 text-center space-x-1.5">
-                      {currentUser.role === 'Admin' && (
+                      </td>
+                      <td className="p-3.5">
+                        {m.statusAktif ? (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-bold">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Aktif</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-full text-[10px]">
+                            <XCircle className="w-3 h-3" />
+                            <span>Non-Aktif</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3.5 text-center space-x-1.5">
+                        {currentUser.role === 'Admin' && (
+                          <button
+                            onClick={() => openQuickEditLokasi(m)}
+                            className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg border border-indigo-200 transition-all cursor-pointer inline-flex items-center"
+                            title="Quick Edit Lokasi & Alokasi Stok"
+                          >
+                            <MapPin className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
-                          onClick={() => openQuickEditLokasi(m)}
-                          className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg border border-indigo-200 transition-all cursor-pointer inline-flex items-center"
-                          title="Quick Edit Lokasi & Alokasi Stok"
+                          disabled={adminAuthorities.editMasterData && currentUser.role !== 'Admin'}
+                          onClick={() => openEditModal(m)}
+                          className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer inline-flex items-center"
+                          title={adminAuthorities.editMasterData && currentUser.role !== 'Admin' ? 'Otoritas edit khusus Admin' : 'Edit Material'}
                         >
-                          <MapPin className="w-3.5 h-3.5" />
+                          <Edit3 className="w-3.5 h-3.5" />
                         </button>
-                      )}
-                      <button
-                        disabled={adminAuthorities.editMasterData && currentUser.role !== 'Admin'}
-                        onClick={() => openEditModal(m)}
-                        className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer inline-flex items-center"
-                        title={adminAuthorities.editMasterData && currentUser.role !== 'Admin' ? 'Otoritas edit khusus Admin' : 'Edit Material'}
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        disabled={adminAuthorities.deleteMasterData && currentUser.role !== 'Admin'}
-                        onClick={() => setDeletingMaterial(m)}
-                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer inline-flex items-center"
-                        title={adminAuthorities.deleteMasterData && currentUser.role !== 'Admin' ? 'Otoritas hapus khusus Admin' : 'Hapus Material'}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                        <button
+                          disabled={adminAuthorities.deleteMasterData && currentUser.role !== 'Admin'}
+                          onClick={() => setDeletingMaterial(m)}
+                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer inline-flex items-center"
+                          title={adminAuthorities.deleteMasterData && currentUser.role !== 'Admin' ? 'Otoritas hapus khusus Admin' : 'Hapus Material'}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -547,17 +552,12 @@ export const MasterDataView: React.FC = () => {
                         ) : (
                           <div className="mt-1 flex items-center space-x-1">
                             <input
-                              type="number"
-                              min="0"
-                              value={modalAllocations[g.nama] !== undefined ? modalAllocations[g.nama] : ''}
+                              type="text"
+                              inputMode="decimal"
+                              value={modalAllocations[g.nama] ?? ''}
                               onChange={e => {
-                                const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                setModalAllocations(prev => {
-                                  const nextAll = { ...prev, [g.nama]: val };
-                                  const sum = Object.values(nextAll).reduce<number>((a, b) => a + (Number(b) || 0), 0);
-                                  setCurrentStock(String(sum));
-                                  return nextAll;
-                                });
+                                const val = e.target.value;
+                                setModalAllocations(prev => ({ ...prev, [g.nama]: val }));
                               }}
                               className="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500 font-mono"
                               placeholder="0"
@@ -677,15 +677,18 @@ export const MasterDataView: React.FC = () => {
                       <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">{g.nama}</span>
                       <div className="mt-1 flex items-center space-x-1">
                         <input
-                          type="number"
-                          min="0"
+                          type="text"
+                          inputMode="decimal"
                           value={quickAllocations[g.nama] !== undefined ? quickAllocations[g.nama] : ''}
                           onChange={e => {
-                            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-                            setQuickAllocations(prev => ({
-                              ...prev,
-                              [g.nama]: val
-                            }));
+                            setQuickAllocations(prev => {
+                              if (e.target.value === '') {
+                                const next = { ...prev };
+                                delete next[g.nama];
+                                return next;
+                              }
+                              return { ...prev, [g.nama]: e.target.value };
+                            });
                           }}
                           className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500 font-mono"
                           placeholder="0"
@@ -701,7 +704,7 @@ export const MasterDataView: React.FC = () => {
               <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-between">
                 <span className="text-xs font-medium text-emerald-800">Total Stok Baru:</span>
                 <span className="text-xs font-bold text-emerald-950 font-mono">
-                  {Object.values(quickAllocations).reduce<number>((sum, v) => sum + (Number(v) || 0), 0).toLocaleString('id-ID')} {quickEditMat.satuan}
+                  {Object.values(quickAllocations).reduce<number>((sum, v) => sum + (parseFloat(String(v).replace(/,/g, '.')) || 0), 0).toLocaleString('id-ID')} {quickEditMat.satuan}
                 </span>
               </div>
             </div>

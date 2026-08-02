@@ -215,29 +215,37 @@ export const IncomingView: React.FC = () => {
   const [nomorPO, setNomorPO] = useState('');
   const [noSuratJalan, setNoSuratJalan] = useState('');
   const [platKendaraan, setPlatKendaraan] = useState('');
-  const [palletInCount, setPalletInCount] = useState<number>(0);
+  const [palletInCount, setPalletInCount] = useState<string | number>('0');
   const [operatorForklift, setOperatorForklift] = useState('');
   const [isManualOperator, setIsManualOperator] = useState(false);
+
+  const parseVal = (v: any) => {
+    if (typeof v === 'number') return v;
+    if (!v) return 0;
+    const clean = String(v).replace(/,/g, '.');
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? 0 : parsed;
+  };
 
   // Details Form State
   const [details, setDetails] = useState<Omit<IncomingDetail, 'id'>[]>([
     {
       materialId: materials[0]?.id || '14000049',
       namaBarang: materials[0]?.namaBarang || 'ANTIBAC014L',
-      qtySuratJalan: '' as any,
-      qtyReject: 0,
+      qtySuratJalan: '0',
+      qtyReject: '0',
       qtyDiterima: 0,
       lokasiSimpan: 'Gedung B1',
       status: 'Good Receiving',
       alasanReject: '',
-      jumlahPallet: '' as any
+      jumlahPallet: '0'
     }
   ]);
 
   // Automatically accumulate Pallet IN count from details' manual/auto jumlahPallet
   useEffect(() => {
     const accumulated = details.reduce((sum, item) => {
-      const pallet = calculatePalletCount(item.qtyDiterima, item.materialId, materials, item.jumlahPallet);
+      const pallet = calculatePalletCount(item.qtyDiterima, item.materialId, materials, parseVal(item.jumlahPallet));
       return sum + pallet;
     }, 0);
     setPalletInCount(accumulated);
@@ -255,13 +263,13 @@ export const IncomingView: React.FC = () => {
       {
         materialId: materials[0]?.id || '14000049',
         namaBarang: materials[0]?.namaBarang || 'ANTIBAC014L',
-        qtySuratJalan: '' as any,
-        qtyReject: 0,
+        qtySuratJalan: '0',
+        qtyReject: '0',
         qtyDiterima: 0,
         lokasiSimpan: 'Gedung B1',
         status: 'Good Receiving' as const,
         alasanReject: '',
-        jumlahPallet: '' as any
+        jumlahPallet: '0'
       }
     ];
     setDetails(initialDetails);
@@ -288,13 +296,13 @@ export const IncomingView: React.FC = () => {
     setDetails(header.details.map(d => ({
       materialId: d.materialId,
       namaBarang: d.namaBarang,
-      qtySuratJalan: d.qtySuratJalan,
-      qtyReject: d.qtyReject,
+      qtySuratJalan: String(d.qtySuratJalan),
+      qtyReject: String(d.qtyReject),
       qtyDiterima: d.qtyDiterima,
       lokasiSimpan: d.lokasiSimpan,
       status: d.status,
       alasanReject: d.alasanReject || '',
-      jumlahPallet: d.jumlahPallet ?? 1
+      jumlahPallet: String(d.jumlahPallet ?? 1)
     })));
     setIsFormOpen(true);
   };
@@ -312,13 +320,13 @@ export const IncomingView: React.FC = () => {
       {
         materialId: defaultMat?.id || '14000049',
         namaBarang: defaultMat?.namaBarang || 'ANTIBAC014L',
-        qtySuratJalan: '' as any,
-        qtyReject: 0,
+        qtySuratJalan: '0',
+        qtyReject: '0',
         qtyDiterima: 0,
         lokasiSimpan: 'Gedung A1',
         status: 'Good Receiving',
         alasanReject: '',
-        jumlahPallet: '' as any
+        jumlahPallet: '0'
       }
     ]);
   };
@@ -352,14 +360,6 @@ export const IncomingView: React.FC = () => {
         const qtySJ = field === 'qtySuratJalan' ? val : item.qtySuratJalan;
         const qtyRej = field === 'qtyReject' ? val : item.qtyReject;
         
-        const parseVal = (v: any) => {
-          if (typeof v === 'number') return v;
-          if (!v) return 0;
-          const clean = String(v).replace(/,/g, '.');
-          const parsed = parseFloat(clean);
-          return isNaN(parsed) ? 0 : parsed;
-        };
-
         const qtySJNum = parseVal(qtySJ);
         const qtyRejNum = parseVal(qtyRej);
         const qtyRec = Math.max(0, qtySJNum - qtyRejNum);
@@ -581,12 +581,13 @@ export const IncomingView: React.FC = () => {
                 <th className="p-3.5">Qty Diterima</th>
                 <th className="p-3.5">Jumlah Pallet</th>
                 <th className="p-3.5">Status</th>
+                <th className="p-3.5 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredHeaders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={11} className="p-8 text-center text-slate-400 italic">
                     Tidak ada transaksi receiving ditemukan.
                   </td>
                 </tr>
@@ -668,6 +669,19 @@ export const IncomingView: React.FC = () => {
                               </div>
                             ))}
                           </div>
+                        </td>
+
+                        {/* Aksi */}
+                        <td className="p-3.5 text-center">
+                          <button
+                            type="button"
+                            disabled={currentUser?.role !== 'Admin'}
+                            onClick={() => handleDelete(h.id, h.noReceiving)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 hover:border-rose-300 transition-all cursor-pointer inline-flex items-center disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={currentUser?.role !== 'Admin' ? 'Otoritas khusus Admin' : 'Hapus Transaksi'}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     </React.Fragment>
@@ -873,13 +887,15 @@ export const IncomingView: React.FC = () => {
                           </button>
                         )}
                         <button
+                          type="button"
+                          disabled={currentUser?.role !== 'Admin'}
                           onClick={() => {
                             if (window.confirm('Hapus antrean pengemudi ini?')) {
                               deleteDriverQueue(item.id);
                             }
                           }}
-                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 hover:border-rose-300 transition-all cursor-pointer inline-flex items-center"
-                          title="Hapus Antrean"
+                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 hover:border-rose-300 transition-all cursor-pointer inline-flex items-center disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={currentUser?.role !== 'Admin' ? "Otoritas khusus Admin" : "Hapus Antrean"}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -990,7 +1006,7 @@ export const IncomingView: React.FC = () => {
                     inputMode="decimal"
                     required
                     value={palletInCount}
-                    onChange={e => setPalletInCount(e.target.value as any)}
+                    onChange={e => setPalletInCount(e.target.value)}
                     className="w-full bg-emerald-50 border border-emerald-300 rounded-xl px-3 py-1.5 text-xs text-emerald-800 font-bold focus:outline-none focus:border-emerald-500"
                     title="Jumlah otomatis ter-akumulasi dari total pallet setiap baris material"
                   />

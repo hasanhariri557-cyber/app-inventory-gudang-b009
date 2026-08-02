@@ -110,10 +110,18 @@ export const OutboundView: React.FC = () => {
   const [customer, setCustomer] = useState('');
   const [tanggal, setTanggal] = useState(today);
   const [ekspedisi, setEkspedisi] = useState('');
-  const [palletOutCount, setPalletOutCount] = useState<number>(8);
+  const [palletOutCount, setPalletOutCount] = useState<string | number>(8);
   const [noKendaraan, setNoKendaraan] = useState('');
   const [operatorForklift, setOperatorForklift] = useState('');
   const [isManualOperator, setIsManualOperator] = useState(false);
+
+  const parseVal = (v: any) => {
+    if (typeof v === 'number') return v;
+    if (!v) return 0;
+    const clean = String(v).replace(/,/g, '.');
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? 0 : parsed;
+  };
 
   const [details, setDetails] = useState<Omit<OutboundDetail, 'id'>[]>(() => {
     const mat = materials[0];
@@ -124,12 +132,12 @@ export const OutboundView: React.FC = () => {
       {
         materialId: mat.id,
         namaBarang: mat.namaBarang,
-        qty: 200,
+        qty: '200',
         satuan: mat.satuan,
         picChecker: currentUser.nama,
         keterangan: '',
         gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1',
-        jumlahPallet: 1
+        jumlahPallet: '1'
       }
     ];
   });
@@ -137,7 +145,7 @@ export const OutboundView: React.FC = () => {
   // Automatically accumulate Pallet OUT count from details' manual/auto jumlahPallet
   React.useEffect(() => {
     const accumulated = details.reduce((sum, item) => {
-      const pallet = calculatePalletCount(item.qty, item.materialId, materials, item.jumlahPallet);
+      const pallet = calculatePalletCount(parseVal(item.qty), item.materialId, materials, parseVal(item.jumlahPallet));
       return sum + pallet;
     }, 0);
     setPalletOutCount(accumulated);
@@ -161,12 +169,12 @@ export const OutboundView: React.FC = () => {
         {
           materialId: mat.id,
           namaBarang: mat.namaBarang,
-          qty: 200,
+          qty: '200',
           satuan: mat.satuan,
           picChecker: currentUser.nama,
           keterangan: '',
           gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1',
-          jumlahPallet: 1
+          jumlahPallet: '1'
         }
       ]);
     } else {
@@ -192,12 +200,12 @@ export const OutboundView: React.FC = () => {
     setDetails(header.details.map(d => ({
       materialId: d.materialId,
       namaBarang: d.namaBarang,
-      qty: d.qty,
+      qty: String(d.qty),
       satuan: d.satuan,
       picChecker: d.picChecker || currentUser.nama,
       keterangan: d.keterangan || '',
       gedungAsal: d.gedungAsal || 'Gedung E1',
-      jumlahPallet: d.jumlahPallet ?? 1
+      jumlahPallet: String(d.jumlahPallet ?? 1)
     })));
     setIsFormOpen(true);
   };
@@ -219,12 +227,12 @@ export const OutboundView: React.FC = () => {
       {
         materialId: mat.id,
         namaBarang: mat.namaBarang,
-        qty: 50,
+        qty: '50',
         satuan: mat.satuan,
         picChecker: currentUser.nama,
         keterangan: '',
         gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1',
-        jumlahPallet: 1
+        jumlahPallet: '1'
       }
     ]);
   };
@@ -691,7 +699,7 @@ export const OutboundView: React.FC = () => {
                         <input
                           type="text"
                           inputMode="decimal"
-                          value={item.qty}
+                          value={item.qty ?? ''}
                           onChange={e => {
                             const val = e.target.value;
                             setDetails(prev => prev.map((d, i) => i === idx ? { ...d, qty: val as any } : d));

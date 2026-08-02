@@ -128,7 +128,7 @@ const SimpleForkliftView: React.FC<any> = ({ forkliftActivities, addForkliftActi
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Jumlah (Qty)</label>
                   <input 
-                    type="number" 
+                    type="text" inputMode="decimal" 
                     required 
                     min="1"
                     value={qty} 
@@ -139,7 +139,7 @@ const SimpleForkliftView: React.FC<any> = ({ forkliftActivities, addForkliftActi
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Jumlah Pallet</label>
                   <input 
-                    type="number" 
+                    type="text" inputMode="decimal" 
                     required 
                     min="1"
                     value={jumlahPallet} 
@@ -311,8 +311,8 @@ export const ForkliftActivityView: React.FC = () => {
         forkliftUnit,
         jenisAktivitas,
         namaBarang: namaMaterial,
-        qty: Number(qty) || 0,
-        jumlahPallet: Number(jumlahPallet) || 0,
+        qty: parseFloat(String(qty).replace(/,/g, '.')) || 0,
+        jumlahPallet: parseFloat(String(jumlahPallet).replace(/,/g, '.')) || 0,
         lokasiAsal,
         lokasiTujuan,
         status,
@@ -324,8 +324,8 @@ export const ForkliftActivityView: React.FC = () => {
         forkliftUnit,
         jenisAktivitas,
         namaBarang: namaMaterial,
-        qty: Number(qty) || 0,
-        jumlahPallet: Number(jumlahPallet) || 0,
+        qty: parseFloat(String(qty).replace(/,/g, '.')) || 0,
+        jumlahPallet: parseFloat(String(jumlahPallet).replace(/,/g, '.')) || 0,
         lokasiAsal,
         lokasiTujuan,
         status,
@@ -680,7 +680,7 @@ export const ForkliftActivityView: React.FC = () => {
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Jumlah Qty Barang</label>
                   <input
-                    type="number"
+                    type="text" inputMode="decimal"
                     min="1"
                     value={qty}
                     onChange={e => setQty(e.target.value)}
@@ -690,7 +690,7 @@ export const ForkliftActivityView: React.FC = () => {
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Jumlah Pallet</label>
                   <input
-                    type="number"
+                    type="text" inputMode="decimal"
                     min="1"
                     value={jumlahPallet}
                     onChange={e => setJumlahPallet(e.target.value)}

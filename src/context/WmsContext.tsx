@@ -2102,33 +2102,35 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetMat = materials.find(m => m.id === materialId);
     if (!targetMat) return;
 
-    // Calculate total allocated stock across buildings
-    const newTotalStock = Object.values(newAllocations).reduce((sum, v) => sum + Math.max(0, Number(v) || 0), 0);
-    
     // Determine primary default location
-    let primaryLoc = newDefaultLoc || targetMat.lokasiDefaut || 'Gedung A1';
+    let primaryLoc = newDefaultLoc || 'Gedung A1';
     let maxQty = -1;
     Object.entries(newAllocations).forEach(([bName, qty]) => {
-      const val = Number(qty) || 0;
+      const valStr = String(qty).replace(/,/g, '.');
+      const val = parseFloat(valStr) || 0;
       if (val > maxQty) {
         maxQty = val;
         if (!newDefaultLoc) primaryLoc = bName;
       }
     });
 
-    const updatedMaterial: Material = {
-      ...targetMat,
-      lokasiDefaut: primaryLoc,
-      locationAllocations: newAllocations,
-      currentStock: newTotalStock > 0 ? newTotalStock : targetMat.currentStock
-    };
-
     // 1. Update materials state & Firestore
-    setMaterials(prev => prev.map(m => m.id === materialId ? updatedMaterial : m));
-    await saveToFirestore('materials', materialId, {
-      lokasiDefaut: primaryLoc,
-      locationAllocations: newAllocations,
-      currentStock: updatedMaterial.currentStock
+    setMaterials(prev => {
+      const targetMat = prev.find(m => m.id === materialId);
+      if (!targetMat) return prev;
+      
+      const updatedLoc = newDefaultLoc || targetMat.lokasiDefaut || primaryLoc;
+
+      saveToFirestore('materials', materialId, {
+        lokasiDefaut: updatedLoc,
+        locationAllocations: newAllocations
+      });
+
+      return prev.map(m => m.id === materialId ? {
+        ...m,
+        lokasiDefaut: updatedLoc,
+        locationAllocations: newAllocations
+      } : m);
     });
 
     // 2. Update incomingHeaders location to match primaryLoc so transaction reports align
@@ -2141,6 +2143,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         return d;
       });
+
       if (headerChanged) {
         saveToFirestore('incomingHeaders', h.id, { details: updatedDetails });
         return { ...h, details: updatedDetails };

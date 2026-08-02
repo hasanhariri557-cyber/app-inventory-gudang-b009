@@ -1503,7 +1503,7 @@ export const StockOpnameView: React.FC = () => {
                                         onChange={e => {
                                           const val = e.target.value;
                                           setCatQtyInputs(prev => ({ ...prev, [key]: val }));
-                                          const parsed = Math.max(0, parseFloat(val) || 0);
+                                          const parsed = Math.max(0, parseVal(val));
                                           const autoPallet = Math.ceil(parsed / upp);
                                           setCatPalletInputs(prev => ({ ...prev, [key]: String(autoPallet) }));
                                         }}
@@ -1691,7 +1691,7 @@ export const StockOpnameView: React.FC = () => {
                                     onChange={e => {
                                       const val = e.target.value;
                                       setCatQtyInputs(prev => ({ ...prev, [key]: val }));
-                                      const parsed = Math.max(0, parseFloat(val) || 0);
+                                      const parsed = Math.max(0, parseVal(val));
                                       const autoPallet = Math.ceil(parsed / upp);
                                       setCatPalletInputs(prev => ({ ...prev, [key]: String(autoPallet) }));
                                     }}

@@ -102,6 +102,12 @@ export const SettingView: React.FC = () => {
     forkliftActivities,
     forkliftUnits,
     forkliftActivityTypes,
+    addForkliftUnit,
+    updateForkliftUnit,
+    deleteForkliftUnit,
+    addForkliftActivityType,
+    updateForkliftActivityType,
+    deleteForkliftActivityType,
     auditLogs
   } = useWms();
 
