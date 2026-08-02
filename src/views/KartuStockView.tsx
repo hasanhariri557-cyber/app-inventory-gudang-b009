@@ -28,6 +28,22 @@ export const KartuStockView: React.FC = () => {
   const [selectedMaterialId, setSelectedMaterialId] = useState<string>(materials[0]?.id || '');
   const [chartMode, setChartMode] = useState<'selected' | 'all'>('selected');
 
+  // Search & Column Filters for table
+  const [searchQuery, setSearchQuery] = useState('');
+  const [colFilterTanggal, setColFilterTanggal] = useState('');
+  const [colFilterJenis, setColFilterJenis] = useState('ALL');
+  const [colFilterGedung, setColFilterGedung] = useState('');
+  const [colFilterKeterangan, setColFilterKeterangan] = useState('');
+
+  // Reset filters when changing material
+  React.useEffect(() => {
+    setSearchQuery('');
+    setColFilterTanggal('');
+    setColFilterJenis('ALL');
+    setColFilterGedung('');
+    setColFilterKeterangan('');
+  }, [selectedMaterialId]);
+
   const activeMaterialId = selectedMaterialId || materials[0]?.id || '';
   const selectedMaterial = materials.find(m => m.id === activeMaterialId) || materials[0];
 
@@ -48,6 +64,24 @@ export const KartuStockView: React.FC = () => {
       ...e,
       saldo: runningBalance
     };
+  });
+
+  const searchedAndFilteredEntries = filteredEntries.filter(e => {
+    const matchSearch = searchQuery === '' || 
+      e.tanggal.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      e.jenisTransaksi.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (e.lokasi || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(e.masuk).includes(searchQuery) ||
+      String(e.keluar).includes(searchQuery) ||
+      String(e.saldo).includes(searchQuery) ||
+      (e.keterangan || '').toLowerCase().includes(searchQuery.toLowerCase());
+      
+    const matchTanggal = e.tanggal.toLowerCase().includes(colFilterTanggal.toLowerCase());
+    const matchJenis = colFilterJenis === 'ALL' || e.jenisTransaksi === colFilterJenis;
+    const matchGedung = (e.lokasi || '').toLowerCase().includes(colFilterGedung.toLowerCase());
+    const matchKeterangan = (e.keterangan || '').toLowerCase().includes(colFilterKeterangan.toLowerCase());
+    
+    return matchSearch && matchTanggal && matchJenis && matchGedung && matchKeterangan;
   });
 
   // Generate last 30 days date list (YYYY-MM-DD)
@@ -125,7 +159,7 @@ export const KartuStockView: React.FC = () => {
 
   const handleExportExcel = () => {
     if (!selectedMaterial) return;
-    const rows = filteredEntries.map(e => ({
+    const rows = searchedAndFilteredEntries.map(e => ({
       'Tanggal': e.tanggal,
       'Jenis Transaksi': e.jenisTransaksi,
       'Gedung / Lokasi': e.lokasi || '-',
@@ -140,7 +174,7 @@ export const KartuStockView: React.FC = () => {
   const handleExportPDF = () => {
     if (!selectedMaterial) return;
     const columns = ['Tanggal', 'Jenis Transaksi', 'Gedung / Lokasi', 'Masuk (+)', 'Keluar (-)', 'Saldo', 'Keterangan'];
-    const rows = filteredEntries.map(e => [
+    const rows = searchedAndFilteredEntries.map(e => [
       e.tanggal,
       e.jenisTransaksi,
       e.lokasi || '-',
@@ -364,6 +398,26 @@ export const KartuStockView: React.FC = () => {
 
       {/* Ledger Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+        <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+              Riwayat Buku Mutasi ({searchedAndFilteredEntries.length} dari {filteredEntries.length} Transaksi)
+            </h3>
+          </div>
+
+          {/* Quick Search Bar */}
+          <div className="relative w-full sm:w-72">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Cari transaksi mutasi..."
+              className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 pl-8 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium shadow-2xs"
+            />
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+          </div>
+        </div>
+
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
@@ -376,16 +430,79 @@ export const KartuStockView: React.FC = () => {
                 <th className="p-3.5 text-indigo-600 font-bold">Saldo Akhir</th>
                 <th className="p-3.5">Keterangan</th>
               </tr>
+              {/* Column Filters Row */}
+              <tr className="bg-slate-100/50 border-b border-slate-200">
+                <td className="p-2">
+                  <input
+                    type="text"
+                    value={colFilterTanggal}
+                    onChange={e => setColFilterTanggal(e.target.value)}
+                    placeholder="Filter Tanggal..."
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  />
+                </td>
+                <td className="p-2">
+                  <select
+                    value={colFilterJenis}
+                    onChange={e => setColFilterJenis(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  >
+                    <option value="ALL">Semua Jenis</option>
+                    <option value="Incoming">Incoming</option>
+                    <option value="Outbound">Outbound</option>
+                    <option value="Mutasi">Mutasi</option>
+                    <option value="Adjustment">Adjustment</option>
+                  </select>
+                </td>
+                <td className="p-2">
+                  <input
+                    type="text"
+                    value={colFilterGedung}
+                    onChange={e => setColFilterGedung(e.target.value)}
+                    placeholder="Filter Gedung..."
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  />
+                </td>
+                <td className="p-2"></td>
+                <td className="p-2"></td>
+                <td className="p-2"></td>
+                <td className="p-2">
+                  <div className="flex items-center space-x-1">
+                    <input
+                      type="text"
+                      value={colFilterKeterangan}
+                      onChange={e => setColFilterKeterangan(e.target.value)}
+                      placeholder="Filter Keterangan..."
+                      className="flex-1 min-w-0 bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                    />
+                    {(colFilterTanggal || colFilterJenis !== 'ALL' || colFilterGedung || colFilterKeterangan) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setColFilterTanggal('');
+                          setColFilterJenis('ALL');
+                          setColFilterGedung('');
+                          setColFilterKeterangan('');
+                        }}
+                        className="text-[10px] text-rose-600 hover:text-rose-800 font-bold px-1.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer shrink-0"
+                        title="Reset Filter"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredEntries.length === 0 ? (
+              {searchedAndFilteredEntries.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-slate-400 italic">
-                    Belum ada catatan transaksi untuk material ini.
+                    Belum ada catatan transaksi untuk material ini yang sesuai filter.
                   </td>
                 </tr>
               ) : (
-                filteredEntries.map(e => (
+                searchedAndFilteredEntries.map(e => (
                   <tr key={e.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-3.5 text-slate-500 font-medium">{e.tanggal}</td>
                     <td className="p-3.5">

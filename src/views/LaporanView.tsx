@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Printer, Filter, Calendar, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { FileText, Download, Printer, Filter, Calendar, FileSpreadsheet, Trash2, Search } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { exportToExcel, exportToPDF, generateSuratJalanPDF } from '../utils/exportUtils';
 
@@ -95,6 +95,16 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
   const todayStr = new Date().toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(todayStr.substring(0, 8) + '01');
   const [endDate, setEndDate] = useState(todayStr);
+
+  // Quick Search & Column Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+
+  // Reset filters when changing active report
+  useEffect(() => {
+    setSearchQuery('');
+    setColumnFilters({});
+  }, [activeReport]);
 
   const filterByDate = (tanggalStr: string) => {
     if (!tanggalStr) return true;
@@ -344,18 +354,33 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
     }
   };
 
-  const reportData = getReportData();
+  const reportData = getReportData() || [];
+
+  const filteredReportData = reportData.filter((row: any) => {
+    const r = row as Record<string, any>;
+    const matchSearch = searchQuery === '' || Object.values(r).some(val => 
+      String(val).toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    
+    const matchColumns = Object.entries(columnFilters).every(([colName, filterVal]) => {
+      if (!filterVal) return true;
+      const cellVal = r[colName];
+      return String(cellVal || '').toLowerCase().includes(String(filterVal).toLowerCase());
+    });
+    
+    return matchSearch && matchColumns;
+  });
 
   const handleExportExcel = () => {
     const reportTitle = reportsList.find(r => r.key === activeReport)?.label || 'Laporan_WMS';
-    exportToExcel(reportData, reportTitle.replace(/[^a-zA-Z0-9]/g, '_'), 'Report Sheet');
+    exportToExcel(filteredReportData, reportTitle.replace(/[^a-zA-Z0-9]/g, '_'), 'Report Sheet');
   };
 
   const handleExportPDF = () => {
-    if (reportData.length === 0) return;
+    if (filteredReportData.length === 0) return;
     const reportTitle = reportsList.find(r => r.key === activeReport)?.label || 'Laporan WMS';
-    const columns = Object.keys(reportData[0]);
-    const rows = reportData.map(row => Object.values(row));
+    const columns = Object.keys(filteredReportData[0]);
+    const rows = filteredReportData.map(row => Object.values(row));
 
     exportToPDF(
       reportTitle.toUpperCase(),
@@ -484,11 +509,25 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
 
       {/* Report Data Preview Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-            Preview {reportsList.find(r => r.key === activeReport)?.label} ({reportData.length} Baris Data)
-          </h3>
-          <span className="text-[11px] text-slate-500 font-medium">Siap Cetak / Unduh</span>
+        <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+              Preview {reportsList.find(r => r.key === activeReport)?.label} ({filteredReportData.length} dari {reportData.length} Baris Data)
+            </h3>
+            <span className="text-[11px] text-slate-500 font-medium">Siap Cetak / Unduh</span>
+          </div>
+
+          {/* Quick Search Bar */}
+          <div className="relative w-full sm:w-72">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Pencarian cepat laporan..."
+              className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 pl-8 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium shadow-2xs"
+            />
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+          </div>
         </div>
 
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
@@ -501,17 +540,45 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
                   ))}
                   <th className="p-3 text-center font-bold">Aksi</th>
                 </tr>
+                {/* Column Filters Row */}
+                <tr className="bg-slate-100/50 border-b border-slate-200">
+                  {Object.keys(reportData[0]).map((key, i) => (
+                    <td key={i} className="p-2">
+                      <input
+                        type="text"
+                        value={columnFilters[key] || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setColumnFilters(prev => ({ ...prev, [key]: val }));
+                        }}
+                        placeholder={`Filter ${key}...`}
+                        className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                      />
+                    </td>
+                  ))}
+                  <td className="p-2 text-center">
+                    {Object.values(columnFilters).some(v => v !== '') && (
+                      <button
+                        type="button"
+                        onClick={() => setColumnFilters({})}
+                        className="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </td>
+                </tr>
               </thead>
             )}
             <tbody className="divide-y divide-slate-100">
-              {reportData.length === 0 ? (
+              {filteredReportData.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-slate-400 italic">
-                    Tidak ada data untuk laporan ini pada rentang tanggal yang dipilih.
+                  <td colSpan={reportData.length > 0 ? Object.keys(reportData[0]).length + 1 : 10} className="p-8 text-center text-slate-400 italic">
+                    Tidak ada data ditemukan untuk pencarian/filter ini.
                   </td>
                 </tr>
               ) : (
-                reportData.map((row, idx) => {
+                filteredReportData.map((row, idx) => {
                   const idValue = row['ID Transaksi'] || row['No SJ'] || row['Nomor DO / SJ'] || row['Nomor DO/SJ'] || row['Material ID'] || '';
                   
                   return (

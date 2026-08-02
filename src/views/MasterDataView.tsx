@@ -23,6 +23,14 @@ export const MasterDataView: React.FC = () => {
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  
+  // Column Filters
+  const [colFilterId, setColFilterId] = useState('');
+  const [colFilterNama, setColFilterNama] = useState('');
+  const [colFilterSatuan, setColFilterSatuan] = useState('');
+  const [colFilterGedung, setColFilterGedung] = useState('');
+  const [colFilterStatus, setColFilterStatus] = useState('ALL');
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [deletingMaterial, setDeletingMaterial] = useState<Material | null>(null);
@@ -160,7 +168,22 @@ export const MasterDataView: React.FC = () => {
   const filteredMaterials = materials.filter(m => {
     const matchSearch = m.id.toLowerCase().includes(search.toLowerCase()) || m.namaBarang.toLowerCase().includes(search.toLowerCase());
     const matchCat = selectedCategory === 'ALL' || m.kategori === selectedCategory;
-    return matchSearch && matchCat;
+    
+    const matchColId = m.id.toLowerCase().includes(colFilterId.toLowerCase());
+    const matchColNama = m.namaBarang.toLowerCase().includes(colFilterNama.toLowerCase());
+    const matchColSatuan = m.satuan.toLowerCase().includes(colFilterSatuan.toLowerCase());
+    
+    const bStocks = getMaterialStockByGedung(m.id);
+    const activeBuildings = Object.entries(bStocks).filter(([_, qty]) => (qty as number) > 0).map(([bName]) => bName.toLowerCase());
+    const matchColGedung = colFilterGedung === '' || 
+      (m.lokasiDefaut || '').toLowerCase().includes(colFilterGedung.toLowerCase()) ||
+      activeBuildings.some(b => b.includes(colFilterGedung.toLowerCase()));
+      
+    const matchColStatus = colFilterStatus === 'ALL' || 
+      (colFilterStatus === 'AKTIF' && m.statusAktif) ||
+      (colFilterStatus === 'NON_AKTIF' && !m.statusAktif);
+
+    return matchSearch && matchCat && matchColId && matchColNama && matchColSatuan && matchColGedung && matchColStatus;
   });
 
   const handleExportExcel = () => {
@@ -311,6 +334,77 @@ export const MasterDataView: React.FC = () => {
                 <th className="p-3.5">Stok Sistem</th>
                 <th className="p-3.5">Status Aktif</th>
                 <th className="p-3.5 text-center">Aksi</th>
+              </tr>
+              <tr className="bg-slate-100/50 border-b border-slate-200">
+                <td className="p-2">
+                  <input
+                    type="text"
+                    value={colFilterId}
+                    onChange={e => setColFilterId(e.target.value)}
+                    placeholder="Filter ID..."
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  />
+                </td>
+                <td className="p-2">
+                  <input
+                    type="text"
+                    value={colFilterNama}
+                    onChange={e => setColFilterNama(e.target.value)}
+                    placeholder="Filter Nama..."
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  />
+                </td>
+                <td className="p-2">
+                  <span className="text-[10px] text-slate-400 italic font-medium">Filter Utama</span>
+                </td>
+                <td className="p-2">
+                  <input
+                    type="text"
+                    value={colFilterSatuan}
+                    onChange={e => setColFilterSatuan(e.target.value)}
+                    placeholder="Filter Satuan..."
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  />
+                </td>
+                <td className="p-2">
+                  <input
+                    type="text"
+                    value={colFilterGedung}
+                    onChange={e => setColFilterGedung(e.target.value)}
+                    placeholder="Filter Gedung..."
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  />
+                </td>
+                <td className="p-2"></td>
+                <td className="p-2"></td>
+                <td className="p-2">
+                  <select
+                    value={colFilterStatus}
+                    onChange={e => setColFilterStatus(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  >
+                    <option value="ALL">Semua</option>
+                    <option value="AKTIF">Aktif</option>
+                    <option value="NON_AKTIF">Non-Aktif</option>
+                  </select>
+                </td>
+                <td className="p-2 text-center">
+                  {(colFilterId || colFilterNama || colFilterSatuan || colFilterGedung || colFilterStatus !== 'ALL') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setColFilterId('');
+                        setColFilterNama('');
+                        setColFilterSatuan('');
+                        setColFilterGedung('');
+                        setColFilterStatus('ALL');
+                      }}
+                      className="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </td>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
