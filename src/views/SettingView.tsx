@@ -1303,27 +1303,37 @@ export const SettingView: React.FC = () => {
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200">
                 <tr>
-                  <th className="p-3 w-1/3">Nama Menu WMS</th>
-                  <th className="p-3 text-center w-1/5">
+                  <th className="p-3 w-1/4">Nama Menu WMS</th>
+                  <th className="p-3 text-center w-[15%]">
                     <div className="flex items-center justify-center space-x-1">
                       <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold">Admin</span>
                     </div>
                   </th>
-                  <th className="p-3 text-center w-1/5">
+                  <th className="p-3 text-center w-[15%]">
                     <div className="flex items-center justify-center space-x-1">
                       <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded font-bold">Checker</span>
                     </div>
                   </th>
-                  <th className="p-3 text-center w-1/5">
+                  <th className="p-3 text-center w-[15%]">
                     <div className="flex items-center justify-center space-x-1">
                       <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">Stoker</span>
+                    </div>
+                  </th>
+                  <th className="p-3 text-center w-[15%]">
+                    <div className="flex items-center justify-center space-x-1">
+                      <span className="px-2 py-0.5 bg-slate-800 text-slate-100 rounded font-bold">Security</span>
+                    </div>
+                  </th>
+                  <th className="p-3 text-center w-[15%]">
+                    <div className="flex items-center justify-center space-x-1">
+                      <span className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded font-bold">Forklift</span>
                     </div>
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {menuList.map((item) => {
-                  const perms = rolePermissions[item.key] || { Admin: true, Checker: false, Stoker: false };
+                  const perms = rolePermissions[item.key] || { Admin: true, Checker: false, Stoker: false, Security: false, Forklift: false };
                   const Icon = item.icon;
 
                   return (
@@ -1385,6 +1395,38 @@ export const SettingView: React.FC = () => {
                         >
                           {perms.Stoker ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Lock className="w-3.5 h-3.5 text-slate-400" />}
                           <span>{perms.Stoker ? 'Akses Diizinkan' : 'Dibatasi'}</span>
+                        </button>
+                      </td>
+
+                      {/* Security Role Permission */}
+                      <td className="p-3 text-center">
+                        <button
+                          disabled={currentUser.role !== 'Admin'}
+                          onClick={() => updateRolePermission(item.key, 'Security', !perms.Security)}
+                          className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-[11px] font-bold transition-all border ${
+                            perms.Security 
+                              ? 'bg-slate-800 text-slate-100 border-slate-700 hover:bg-slate-700' 
+                              : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
+                          }`}
+                        >
+                          {perms.Security ? <Check className="w-3.5 h-3.5 text-slate-100" /> : <Lock className="w-3.5 h-3.5 text-slate-400" />}
+                          <span>{perms.Security ? 'Akses Diizinkan' : 'Dibatasi'}</span>
+                        </button>
+                      </td>
+
+                      {/* Forklift Role Permission */}
+                      <td className="p-3 text-center">
+                        <button
+                          disabled={currentUser.role !== 'Admin'}
+                          onClick={() => updateRolePermission(item.key, 'Forklift', !perms.Forklift)}
+                          className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-[11px] font-bold transition-all border ${
+                            perms.Forklift 
+                              ? 'bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100' 
+                              : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
+                          }`}
+                        >
+                          {perms.Forklift ? <Check className="w-3.5 h-3.5 text-orange-600" /> : <Lock className="w-3.5 h-3.5 text-slate-400" />}
+                          <span>{perms.Forklift ? 'Akses Diizinkan' : 'Dibatasi'}</span>
                         </button>
                       </td>
                     </tr>

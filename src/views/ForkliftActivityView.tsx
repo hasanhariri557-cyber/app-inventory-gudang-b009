@@ -23,26 +23,193 @@ import { exportAllWmsToExcel } from '../utils/exportUtils';
 
 const SimpleForkliftView: React.FC<any> = ({ forkliftActivities, addForkliftActivity, updateForkliftActivity, materials, gedungList, currentUser, forkliftUnits, forkliftActivityTypes }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  // Simple view implementation for Forklift role
+  
+  // Form states
+  const [jenisAktivitas, setJenisAktivitas] = useState(forkliftActivityTypes[0]?.nama || 'Mutasi Rak');
+  const [namaBarang, setNamaBarang] = useState('');
+  const [qty, setQty] = useState<number | string>('');
+  const [jumlahPallet, setJumlahPallet] = useState<number | string>(1);
+  const [lokasiAsal, setLokasiAsal] = useState(gedungList[0]?.nama || 'Docking A');
+  const [lokasiTujuan, setLokasiTujuan] = useState(gedungList[1]?.nama || gedungList[0]?.nama || 'Gedung 1');
+  const [catatan, setCatatan] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    addForkliftActivity({
+      operatorName: currentUser?.nama || 'Operator',
+      forkliftUnit: forkliftUnits[0]?.nama || 'Forklift 1',
+      jenisAktivitas,
+      namaBarang,
+      qty: Number(qty) || 0,
+      jumlahPallet: Number(jumlahPallet) || 0,
+      lokasiAsal,
+      lokasiTujuan,
+      status: 'Selesai',
+      catatan,
+      pic: currentUser?.nama || 'Operator'
+    });
+    
+    // Reset form
+    setNamaBarang('');
+    setQty('');
+    setJumlahPallet(1);
+    setCatatan('');
+    setIsModalOpen(false);
+  };
+
   return (
     <div className="p-4 space-y-4">
       <h1 className="text-3xl font-extrabold text-slate-900">Dashboard Forklift</h1>
       <button 
+        type="button"
         onClick={() => setIsModalOpen(true)}
-        className="w-full h-20 text-xl font-bold bg-indigo-600 text-white rounded-2xl shadow-lg"
+        className="w-full h-20 text-xl font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
+        style={{ pointerEvents: 'auto', zIndex: 10 }}
       >
+        <Plus className="w-6 h-6" />
         Input Aktivitas Baru
       </button>
-      <div className="space-y-3">
+      <div className="space-y-3 pb-8">
         {forkliftActivities.map((act: any) => (
-          <div key={act.id} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm text-lg">
+          <div key={act.id} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm text-lg relative z-0">
             <p className="font-bold">{act.jenisAktivitas}</p>
-            <p className="text-slate-600">{act.namaBarang} - {act.qty} Unit</p>
+            <p className="text-slate-600">{act.namaBarang} - {act.qty} Unit ({act.jumlahPallet} Pallet)</p>
             <p className="text-sm font-semibold text-indigo-700">{act.lokasiAsal} ➔ {act.lokasiTujuan}</p>
           </div>
         ))}
+        {forkliftActivities.length === 0 && (
+          <div className="p-8 text-center text-slate-500 bg-white border border-slate-200 rounded-2xl">
+            Belum ada aktivitas.
+          </div>
+        )}
       </div>
-      {/* TODO: Add simple modal for input */}
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] animate-fadeIn">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h2 className="text-lg font-bold text-slate-800">Input Aktivitas Baru</h2>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Jenis Aktivitas</label>
+                <select 
+                  required 
+                  value={jenisAktivitas} 
+                  onChange={e => setJenisAktivitas(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                >
+                  {forkliftActivityTypes.map((t: any) => (
+                    <option key={t.id} value={t.nama}>{t.nama}</option>
+                  ))}
+                  <option value="Bongkar">Bongkar</option>
+                  <option value="Muat">Muat</option>
+                  <option value="Mutasi Rak">Mutasi Rak</option>
+                  <option value="Put Away">Put Away</option>
+                </select>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Nama Barang</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={namaBarang} 
+                    onChange={e => setNamaBarang(e.target.value)}
+                    placeholder="Contoh: Semen 50kg"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Jumlah (Qty)</label>
+                  <input 
+                    type="number" 
+                    required 
+                    min="1"
+                    value={qty} 
+                    onChange={e => setQty(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Jumlah Pallet</label>
+                  <input 
+                    type="number" 
+                    required 
+                    min="1"
+                    value={jumlahPallet} 
+                    onChange={e => setJumlahPallet(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Lokasi Asal</label>
+                  <select 
+                    required 
+                    value={lokasiAsal} 
+                    onChange={e => setLokasiAsal(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  >
+                    {gedungList.map((g: any) => (
+                      <option key={g.id} value={g.nama}>{g.nama}</option>
+                    ))}
+                    <option value="Luar Ruangan">Luar Ruangan</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Lokasi Tujuan</label>
+                  <select 
+                    required 
+                    value={lokasiTujuan} 
+                    onChange={e => setLokasiTujuan(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                  >
+                    {gedungList.map((g: any) => (
+                      <option key={g.id} value={g.nama}>{g.nama}</option>
+                    ))}
+                    <option value="Luar Ruangan">Luar Ruangan</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Catatan / Remark</label>
+                <input 
+                  type="text" 
+                  value={catatan} 
+                  onChange={e => setCatatan(e.target.value)}
+                  placeholder="Opsional..."
+                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors"
+                >
+                  Simpan Aktivitas
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -188,7 +355,7 @@ export const ForkliftActivityView: React.FC = () => {
             Aktivitas Operator Forklift & Gudang
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
-            Catat dan pantau perpindahan palet, penempatan barang (put away), bongkar muat truk, dan mutasi rak oleh operator forklift secara real-time.
+            Catat dan pantau perpindahan palet, penempatan barang (put away), bongkar muat truk, dan alokasi barang oleh operator forklift secara real-time.
           </p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -219,7 +386,7 @@ export const ForkliftActivityView: React.FC = () => {
           </button>
           <button
             onClick={handleOpenAddModal}
-            className="flex-1 md:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
+            className="flex-1 md:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 relative z-10 pointer-events-auto"
           >
             <Plus className="w-4 h-4" />
             <span>Input Aktivitas Baru</span>
@@ -438,7 +605,7 @@ export const ForkliftActivityView: React.FC = () => {
 
       {/* Modal Add / Edit */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 pointer-events-auto">
           <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 animate-scaleUp">
             <div className="bg-slate-900 text-white p-6 flex justify-between items-center">
               <div className="flex items-center space-x-2.5">

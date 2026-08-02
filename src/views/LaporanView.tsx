@@ -38,6 +38,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
     deleteStockOpname,
     deleteKartuStock,
     deleteMaterial,
+    deleteForkliftActivity,
     appLogoUrl
   } = useWms();
 
@@ -80,6 +81,8 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
         await deleteStockOpname(id);
       } else if (type === 'kartu_stock') {
         await deleteKartuStock(id);
+      } else if (type === 'forklift_work') {
+        await deleteForkliftActivity(id);
       }
     } catch (err) {
       console.error("Error executing delete:", err);
@@ -107,8 +110,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
     { key: 'pallet_out', label: '6. Laporan Pallet OUT' },
     { key: 'stock_opname', label: '7. Laporan Stock Opname' },
     { key: 'vendor_mobil', label: '8. Laporan Vendor Mobil Masuk' },
-    { key: 'kartu_stock', label: '9. Laporan Kartu Stock' },
-    { key: 'forklift_work', label: '10. Report Hasil Kerja Forklift' }
+    { key: 'kartu_stock', label: '9. Laporan Kartu Stock' }
   ];
 
   // Generate Report Table Data Based on Active Report
@@ -570,6 +572,8 @@ export const LaporanView: React.FC<LaporanViewProps> = ({ onOpenSpreadsheetModal
                 Apakah Anda yakin ingin menghapus data dengan ID <span className="font-semibold text-slate-800">{deleteConfirm.label}</span>? 
                 {deleteConfirm.type === 'stock' ? (
                   <span> Tindakan ini akan menghapus data master barang secara permanen.</span>
+                ) : deleteConfirm.type === 'forklift_work' ? (
+                  <span> Tindakan ini akan menghapus catatan aktivitas forklift secara permanen.</span>
                 ) : (
                   <span> Tindakan ini akan menghapus catatan transaksi dan secara otomatis menyesuaikan/mengembalikan jumlah stok material terkait.</span>
                 )}

@@ -724,13 +724,13 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_currentUser`, JSON.stringify(currentUser));
     if (isLoggedIn && currentUser) {
-      if (currentUser.role === 'Security' && activeMenu !== 'incoming') {
+      if (currentUser.role === 'Security' && activeMenu === 'dashboard') {
         setActiveMenu('incoming');
-      } else if (currentUser.role === 'Forklift' && activeMenu !== 'forklift_activity') {
+      } else if (currentUser.role === 'Forklift' && activeMenu === 'dashboard') {
         setActiveMenu('forklift_activity');
       }
     }
-  }, [currentUser, isLoggedIn, activeMenu]);
+  }, [currentUser, isLoggedIn]);
 
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_isLoggedIn`, String(isLoggedIn));
@@ -999,10 +999,15 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const checkPermission = (menu: string): boolean => {
     const role = currentUser.role;
     const menuKey = menu as MenuKey;
+
+    if (role === 'Admin') return true;
+    if (role === 'Security' && menu === 'incoming') return true;
+    if (role === 'Forklift' && menu === 'forklift_activity') return true;
+
     if (rolePermissions[menuKey] && rolePermissions[menuKey][role] !== undefined) {
       return rolePermissions[menuKey][role];
     }
-    if (role === 'Admin') return true;
+    
     if (role === 'Security') {
       return menu === 'incoming';
     }
@@ -1011,6 +1016,9 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (role === 'Stoker') {
       return ['dashboard', 'stock_opname', 'put_away', 'warehouse_layout', 'mutasi', 'kartu_stock'].includes(menu);
+    }
+    if (role === 'Forklift') {
+      return ['forklift_activity', 'warehouse_layout'].includes(menu);
     }
     return false;
   };

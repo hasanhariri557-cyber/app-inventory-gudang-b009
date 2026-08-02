@@ -659,53 +659,7 @@ export const OutboundView: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Operator Forklift</label>
-                  <div className="flex gap-2">
-                    {!isManualOperator ? (
-                      <select
-                        value={operatorForklift}
-                        onChange={e => {
-                          if (e.target.value === '__manual__') {
-                            setIsManualOperator(true);
-                            setOperatorForklift('');
-                          } else {
-                            setOperatorForklift(e.target.value);
-                          }
-                        }}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
-                      >
-                        <option value="">-- Pilih Operator --</option>
-                        {users.filter(u => u.status === 'Aktif').map(u => (
-                          <option key={u.id} value={u.nama}>{u.nama} ({u.role})</option>
-                        ))}
-                        <option value="__manual__">✏️ Input Manual...</option>
-                      </select>
-                    ) : (
-                      <div className="flex gap-1 w-full">
-                        <input
-                          type="text"
-                          required
-                          value={operatorForklift}
-                          onChange={e => setOperatorForklift(e.target.value)}
-                          placeholder="Nama operator..."
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsManualOperator(false);
-                            setOperatorForklift('');
-                          }}
-                          className="px-2 py-1 bg-slate-150 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-bold"
-                          title="Pilih dari daftar user"
-                        >
-                          Daftar
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
+
               </div>
 
               <div className="space-y-3">

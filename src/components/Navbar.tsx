@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Boxes, 
   User as UserIcon, 
@@ -29,6 +29,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleSidebar,
   activeMenuTitle
 }) => {
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const { 
     currentUser, 
     kpis, 
@@ -81,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="flex items-center space-x-2">
                 <span className="font-bold text-base tracking-tight text-slate-900 dark:text-white">{appTitle || 'WMS Gudang'}</span>
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">Sistem Manajemen Gudang & Logistik Real-Time</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">Sistem Manajemen Gudang Pancawati  Real-Time</p>
             </div>
           </div>
         </div>
@@ -158,20 +159,53 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Logout Button */}
             <button
-              onClick={() => {
-                setIsLoggedIn(false);
-                showNotification('Logout Berhasil', 'Anda telah keluar dari sesi WMS. Silakan masuk kembali untuk mengakses sistem.', 'info', 'Autentikasi');
-              }}
-              className="p-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-955/40 dark:hover:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-lg border border-rose-200 dark:border-rose-900/50 transition-all cursor-pointer flex items-center justify-center"
+              onClick={() => setShowLogoutModal(true)}
+              className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 rounded-lg border border-rose-100 dark:border-rose-900/50 transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 group hover:shadow-sm active:scale-95"
               title="Keluar / Logout dari Sistem"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform duration-300" />
+              <span className="text-xs font-bold hidden sm:inline-block">Logout</span>
             </button>
           </div>
 
         </div>
 
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 p-8 flex flex-col items-center text-center transform transition-all animate-scaleUp">
+            <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center mb-5 shadow-inner">
+              <LogOut className="w-8 h-8 ml-1" />
+            </div>
+            <h3 className="text-xl font-extrabold text-slate-800 dark:text-white mb-2">Konfirmasi Logout</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 px-2 leading-relaxed">
+              Apakah Anda yakin ingin keluar dari WMS Gudang Pancawati?
+            </p>
+            
+            <div className="flex gap-3 w-full">
+              <button 
+                onClick={() => setShowLogoutModal(false)}
+                className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm rounded-full transition-colors active:scale-95"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={() => {
+                  setShowLogoutModal(false);
+                  setIsLoggedIn(false);
+                  showNotification('Logout Berhasil', 'Anda telah keluar dari sesi WMS. Silakan masuk kembali untuk mengakses sistem.', 'info', 'Autentikasi');
+                }}
+                className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm rounded-full shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center gap-2 group"
+              >
+                <span>Ya, Keluar</span>
+                <LogOut className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
