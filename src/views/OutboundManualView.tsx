@@ -529,27 +529,6 @@ export const OutboundManualView: React.FC = () => {
                       </div>
 
                       <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">Gedung Asal</label>
-                        <select
-                          value={item.gedungAsal || 'Gedung E1'}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setDetails(prev => prev.map((d, i) => i === idx ? { ...d, gedungAsal: val } : d));
-                          }}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
-                        >
-                          {gedungList.map((g, gIdx) => {
-                            const stockInGedung = item.materialId ? (getMaterialStockByGedung(item.materialId)[g.nama] || 0) : 0;
-                            return (
-                              <option key={`${g.id}-${gIdx}`} value={g.nama}>
-                                {g.nama} {item.materialId ? `(${stockInGedung > 0 ? `Stok: ${stockInGedung}` : 'KOSONG'})` : ''}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </div>
-
-                      <div className="sm:col-span-2">
                         <label className="block text-[11px] font-medium text-slate-600 mb-1">Keterangan</label>
                         <input
                           type="text"

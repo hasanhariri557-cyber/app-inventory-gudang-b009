@@ -169,7 +169,6 @@ export function generateSuratJalanPDF(
   } else {
     doc.text(`Total Pallet Out: ${outbound.palletOutCount} Pallet`, 120, 46);
   }
-  doc.text(`Status: OUTBOUND COMPLETED`, 120, 52);
 
   // Table Details
   const tableData = outbound.details.map((d, index) => [
@@ -183,11 +182,13 @@ export function generateSuratJalanPDF(
   ]);
 
   autoTable(doc, {
-    startY: 60,
+    startY: 52,
     head: [['No', 'Material ID', 'Nama Barang', 'Qty', 'Satuan', 'PIC Checker', 'Keterangan']],
     body: tableData,
-    theme: 'striped',
-    headStyles: { fillColor: [30, 58, 138] }
+    theme: 'grid',
+    headStyles: { fillColor: [30, 58, 138] },
+    styles: { fillColor: [255, 255, 255] },
+    alternateRowStyles: { fillColor: [255, 255, 255] }
   });
 
   // Signature lines

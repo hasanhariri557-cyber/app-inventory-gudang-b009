@@ -517,7 +517,7 @@ export const MasterDataView: React.FC = () => {
                     type="text"
                     inputMode="decimal"
                     required
-                    disabled={currentUser.role === 'Admin'}
+                    disabled={currentUser.role !== 'Admin'}
                     value={currentStock}
                     onChange={e => setCurrentStock(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-bold disabled:bg-slate-100 disabled:text-slate-600"

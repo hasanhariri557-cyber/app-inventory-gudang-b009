@@ -132,12 +132,12 @@ export const OutboundView: React.FC = () => {
       {
         materialId: mat.id,
         namaBarang: mat.namaBarang,
-        qty: '200',
+        qty: '',
         satuan: mat.satuan,
         picChecker: currentUser.nama,
         keterangan: '',
         gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1',
-        jumlahPallet: '1'
+        jumlahPallet: ''
       }
     ];
   });
@@ -169,12 +169,12 @@ export const OutboundView: React.FC = () => {
         {
           materialId: mat.id,
           namaBarang: mat.namaBarang,
-          qty: '200',
+          qty: '',
           satuan: mat.satuan,
           picChecker: currentUser.nama,
           keterangan: '',
           gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1',
-          jumlahPallet: '1'
+          jumlahPallet: ''
         }
       ]);
     } else {
@@ -227,12 +227,12 @@ export const OutboundView: React.FC = () => {
       {
         materialId: mat.id,
         namaBarang: mat.namaBarang,
-        qty: '50',
+        qty: '',
         satuan: mat.satuan,
         picChecker: currentUser.nama,
         keterangan: '',
         gedungAsal: buildingWithStock || mat.lokasiDefaut || 'Gedung E1',
-        jumlahPallet: '1'
+        jumlahPallet: ''
       }
     ]);
   };
@@ -453,7 +453,6 @@ export const OutboundView: React.FC = () => {
                 <th className="p-3.5">Ekspedisi</th>
                 <th className="p-3.5">No. Kendaraan</th>
                 <th className="p-3.5">PIC Checker</th>
-                <th className="p-3.5">Operator Forklift</th>
                 <th className="p-3.5 text-center">Print</th>
                 <th className="p-3.5">Keterangan</th>
               </tr>
@@ -461,7 +460,7 @@ export const OutboundView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredOutbounds.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={13} className="p-8 text-center text-slate-400 italic">
                     Tidak ada transaksi pengiriman outbound.
                   </td>
                 </tr>

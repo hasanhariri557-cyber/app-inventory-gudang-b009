@@ -25,13 +25,38 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 /**
+ * Helper function to deeply clean any undefined fields from objects/arrays
+ * before sending to Firestore, preventing WriteBatch.set() invalid data errors.
+ */
+function cleanUndefined(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanUndefined(item));
+  }
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        const val = obj[key];
+        if (val !== undefined) {
+          cleaned[key] = cleanUndefined(val);
+        }
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
+/**
  * Save a single document to Firestore
  */
 export async function saveToFirestore(collectionName: string, docId: string, data: any) {
   try {
     const docRef = doc(db, collectionName, docId);
+    const cleanedData = cleanUndefined(data);
     await setDoc(docRef, {
-      ...data,
+      ...cleanedData,
       updatedAt: new Date().toISOString()
     }, { merge: true });
   } catch (error) {
@@ -87,8 +112,9 @@ export async function syncCollectionToFirestore(collectionName: string, dataList
       chunk.forEach((item) => {
         if (item && item.id) {
           const docRef = doc(db, collectionName, item.id);
+          const cleanedItem = cleanUndefined(item);
           b.set(docRef, {
-            ...item,
+            ...cleanedItem,
             updatedAt: new Date().toISOString()
           }, { merge: true });
         }
@@ -173,8 +199,9 @@ export async function syncCollectionIncrementally(
       chunk.forEach(op => {
         const docRef = doc(db, collectionName, op.id);
         if (op.type === 'set' && op.data) {
+          const cleanedData = cleanUndefined(op.data);
           batch.set(docRef, {
-            ...op.data,
+            ...cleanedData,
             updatedAt: new Date().toISOString()
           }, { merge: true });
         } else if (op.type === 'delete') {
