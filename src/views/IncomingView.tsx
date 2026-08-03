@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowDownLeft, Plus, Trash2, CheckCircle2, AlertTriangle, XCircle, Search, Layers, FileText, ChevronDown, Check, Pencil, QrCode, Volume2, Play, CheckSquare, Clock, Truck, Download, Boxes } from 'lucide-react';
+import { ArrowDownLeft, Plus, Trash2, CheckCircle2, AlertTriangle, XCircle, Search, Layers, FileText, ChevronDown, Check, Pencil, QrCode, Volume2, Play, CheckSquare, Clock, Truck, Download, Boxes, Calendar } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import QRCode from 'qrcode';
 import { IncomingDetail, IncomingHeader, Material } from '../types';
@@ -245,26 +245,52 @@ export const IncomingView: React.FC = () => {
     return true;
   });
 
-  const activeBongkarQueues = React.useMemo(() => {
+  const [statsDateFilter, setStatsDateFilter] = useState<string>(today);
+  const [statsShiftFilter, setStatsShiftFilter] = useState<string>('Semua');
+
+  const filteredStatsQueues = React.useMemo(() => {
     return driverQueues.filter(q => {
-      const isNotSelesai = q.status !== 'Selesai';
-      const isToday = q.tanggalDaftar?.startsWith(today);
-      const isBongkar = !q.aktivitas || q.aktivitas === 'Bongkar' || q.aktivitas.toLowerCase() === 'bongkar';
-      return (isNotSelesai || isToday) && isBongkar;
+      if (statsDateFilter) {
+        const itemDate = q.tanggalDaftar ? q.tanggalDaftar.split('T')[0] : '';
+        if (itemDate !== statsDateFilter) return false;
+      }
+
+      if (statsShiftFilter !== 'Semua') {
+        const timeStr = q.tanggalDaftar ? q.tanggalDaftar.split('T')[1] || '00:00:00' : '00:00:00';
+        const hour = parseInt(timeStr.split(':')[0], 10) || 0;
+        
+        if (statsShiftFilter === 'Shift 1' && (hour < 6 || hour >= 14)) return false;
+        if (statsShiftFilter === 'Shift 2' && (hour < 14 || hour >= 22)) return false;
+        if (statsShiftFilter === 'Shift 3' && (hour < 22 && hour >= 6)) return false;
+      }
+
+      return true;
     });
-  }, [driverQueues, today]);
+  }, [driverQueues, statsDateFilter, statsShiftFilter]);
+
+  const totalAntreanStats = filteredStatsQueues.length;
+  const menungguStats = filteredStatsQueues.filter(q => q.status === 'Menunggu').length;
+  const dipanggilStats = filteredStatsQueues.filter(q => q.status === 'Dipanggil').length;
+  const bongkarMuatStats = filteredStatsQueues.filter(q => q.status === 'Bongkar Muat').length;
+
+  const activeBongkarQueuesStats = React.useMemo(() => {
+    return filteredStatsQueues.filter(q => {
+      const isBongkar = !q.aktivitas || q.aktivitas === 'Bongkar' || q.aktivitas.toLowerCase() === 'bongkar';
+      return isBongkar;
+    });
+  }, [filteredStatsQueues]);
 
   const totalBongkarRawmat = React.useMemo(() => {
-    return activeBongkarQueues.filter(q => (q.jenisBarang || '').toLowerCase().includes('rawmat')).length;
-  }, [activeBongkarQueues]);
+    return activeBongkarQueuesStats.filter(q => (q.jenisBarang || '').toLowerCase().includes('rawmat')).length;
+  }, [activeBongkarQueuesStats]);
 
   const totalBongkarKarton = React.useMemo(() => {
-    return activeBongkarQueues.filter(q => (q.jenisBarang || '').toLowerCase().includes('karton')).length;
-  }, [activeBongkarQueues]);
+    return activeBongkarQueuesStats.filter(q => (q.jenisBarang || '').toLowerCase().includes('karton')).length;
+  }, [activeBongkarQueuesStats]);
 
   const totalBongkarPackaging = React.useMemo(() => {
-    return activeBongkarQueues.filter(q => (q.jenisBarang || '').toLowerCase().includes('packaging')).length;
-  }, [activeBongkarQueues]);
+    return activeBongkarQueuesStats.filter(q => (q.jenisBarang || '').toLowerCase().includes('packaging')).length;
+  }, [activeBongkarQueuesStats]);
 
   useEffect(() => {
     if (isQrModalOpen) {
@@ -823,7 +849,52 @@ export const IncomingView: React.FC = () => {
       </div>
     </>
   ) : (
-    <>
+    <div className="space-y-4">
+      {/* Date & Shift Filter Bar for Statistics Cards */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center space-x-2">
+          <Calendar className="w-4 h-4 text-emerald-600" />
+          <span className="text-xs font-semibold text-slate-700">Filter Tanggal & Shift Statistik:</span>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-2">
+          <div>
+            <input
+              type="date"
+              value={statsDateFilter}
+              onChange={e => setStatsDateFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-medium"
+              title="Pilih Tanggal Statistik"
+            />
+          </div>
+
+          <div>
+            <select
+              value={statsShiftFilter}
+              onChange={e => setStatsShiftFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-medium"
+            >
+              <option value="Semua">Semua Shift (00:00 - 24:00)</option>
+              <option value="Shift 1">Shift 1 (06:00 - 14:00)</option>
+              <option value="Shift 2">Shift 2 (14:00 - 22:00)</option>
+              <option value="Shift 3">Shift 3 (22:00 - 06:00)</option>
+            </select>
+          </div>
+
+          {(statsDateFilter !== today || statsShiftFilter !== 'Semua') && (
+            <button
+              onClick={() => {
+                setStatsDateFilter(today);
+                setStatsShiftFilter('Semua');
+              }}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+            >
+              Reset Filter
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Driver Queue KPI Stats Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
@@ -832,7 +903,7 @@ export const IncomingView: React.FC = () => {
           </div>
           <div>
             <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Total Antrean</span>
-            <span className="text-lg font-bold text-slate-900">{driverQueues.length}</span>
+            <span className="text-lg font-bold text-slate-900">{totalAntreanStats}</span>
           </div>
         </div>
         
@@ -842,7 +913,7 @@ export const IncomingView: React.FC = () => {
           </div>
           <div>
             <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Menunggu</span>
-            <span className="text-lg font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Menunggu').length}</span>
+            <span className="text-lg font-bold text-slate-900">{menungguStats}</span>
           </div>
         </div>
 
@@ -852,7 +923,7 @@ export const IncomingView: React.FC = () => {
           </div>
           <div>
             <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Dipanggil</span>
-            <span className="text-lg font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Dipanggil').length}</span>
+            <span className="text-lg font-bold text-slate-900">{dipanggilStats}</span>
           </div>
         </div>
 
@@ -862,7 +933,7 @@ export const IncomingView: React.FC = () => {
           </div>
           <div>
             <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Bongkar Muat</span>
-            <span className="text-lg font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Bongkar Muat').length}</span>
+            <span className="text-lg font-bold text-slate-900">{bongkarMuatStats}</span>
           </div>
         </div>
 
@@ -1127,7 +1198,7 @@ export const IncomingView: React.FC = () => {
           </table>
         </div>
       </div>
-    </>
+    </div>
   )}
 
       {/* NEW RECEIVING FORM MODAL */}
