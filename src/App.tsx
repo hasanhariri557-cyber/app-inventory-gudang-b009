@@ -80,11 +80,11 @@ function MainApp() {
         setIsLoggedIn(false);
         showNotification(
           'Sesi Berakhir Otomatis',
-          'Anda telah dikeluarkan otomatis setelah 5 menit tidak ada aktivitas demi keamanan sistem shift.',
+          'Anda telah dikeluarkan otomatis setelah 15 menit tidak ada aktivitas demi keamanan sistem shift.',
           'warning',
           'Keamanan Sesi'
         );
-      }, 5 * 60 * 1000); // 5 minutes
+      }, 15 * 60 * 1000); // 15 minutes
     };
 
     // User activity events to listen to
