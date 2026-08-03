@@ -34,6 +34,8 @@ export interface IncomingDetail {
   status: 'Good Receiving' | 'Tolak' | 'Rejected';
   alasanReject?: string;
   jumlahPallet?: number;
+  nomorPO?: string;
+  noSuratJalan?: string;
 }
 
 export interface IncomingHeader {

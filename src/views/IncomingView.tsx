@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowDownLeft, Plus, Trash2, CheckCircle2, AlertTriangle, XCircle, Search, Layers, FileText, ChevronDown, Check, Pencil, QrCode, Volume2, Play, CheckSquare, Clock, Truck, Download } from 'lucide-react';
+import { ArrowDownLeft, Plus, Trash2, CheckCircle2, AlertTriangle, XCircle, Search, Layers, FileText, ChevronDown, Check, Pencil, QrCode, Volume2, Play, CheckSquare, Clock, Truck, Download, Boxes } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import QRCode from 'qrcode';
 import { IncomingDetail, IncomingHeader, Material } from '../types';
@@ -134,6 +134,15 @@ export const IncomingView: React.FC = () => {
     users
   } = useWms();
 
+  const getLocalDateString = () => {
+    const d = new Date();
+    const offset = d.getTimezoneOffset();
+    const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
+  };
+
+  const today = getLocalDateString();
+
   const [activeTab, setActiveTab] = useState<'receiving' | 'queue'>('receiving');
   const [activityFilter, setActivityFilter] = useState<'Semua' | 'Bongkar' | 'Muat'>('Semua');
   const [dateFilter, setDateFilter] = useState<string>(() => {
@@ -236,6 +245,27 @@ export const IncomingView: React.FC = () => {
     return true;
   });
 
+  const activeBongkarQueues = React.useMemo(() => {
+    return driverQueues.filter(q => {
+      const isNotSelesai = q.status !== 'Selesai';
+      const isToday = q.tanggalDaftar?.startsWith(today);
+      const isBongkar = !q.aktivitas || q.aktivitas === 'Bongkar' || q.aktivitas.toLowerCase() === 'bongkar';
+      return (isNotSelesai || isToday) && isBongkar;
+    });
+  }, [driverQueues, today]);
+
+  const totalBongkarRawmat = React.useMemo(() => {
+    return activeBongkarQueues.filter(q => (q.jenisBarang || '').toLowerCase().includes('rawmat')).length;
+  }, [activeBongkarQueues]);
+
+  const totalBongkarKarton = React.useMemo(() => {
+    return activeBongkarQueues.filter(q => (q.jenisBarang || '').toLowerCase().includes('karton')).length;
+  }, [activeBongkarQueues]);
+
+  const totalBongkarPackaging = React.useMemo(() => {
+    return activeBongkarQueues.filter(q => (q.jenisBarang || '').toLowerCase().includes('packaging')).length;
+  }, [activeBongkarQueues]);
+
   useEffect(() => {
     if (isQrModalOpen) {
       const generateQr = async () => {
@@ -269,9 +299,12 @@ export const IncomingView: React.FC = () => {
   useEffect(() => {
     if (activeAutofillDriver) {
       setVendor(activeAutofillDriver.namaVendor);
-      setNomorPO(activeAutofillDriver.noPoSJ || '');
-      setNoSuratJalan(activeAutofillDriver.noPoSJ || '');
       setPlatKendaraan(activeAutofillDriver.platNomor);
+      setDetails(prev => prev.map((d, i) => i === 0 ? {
+        ...d,
+        nomorPO: activeAutofillDriver.noPoSJ || '',
+        noSuratJalan: activeAutofillDriver.noPoSJ || ''
+      } : d));
       
       setIsFormOpen(true);
       setEditingId(null);
@@ -284,20 +317,9 @@ export const IncomingView: React.FC = () => {
     }
   }, [activeAutofillDriver, setActiveAutofillDriver]);
 
-  // Timezone-safe local date YYYY-MM-DD
-  const getLocalDateString = () => {
-    const d = new Date();
-    const offset = d.getTimezoneOffset();
-    const localDate = new Date(d.getTime() - (offset * 60 * 1000));
-    return localDate.toISOString().split('T')[0];
-  };
-
-  const today = getLocalDateString();
   const [filterDate, setFilterDate] = useState(today);
   const [tanggal, setTanggal] = useState(today);
   const [vendor, setVendor] = useState('');
-  const [nomorPO, setNomorPO] = useState('');
-  const [noSuratJalan, setNoSuratJalan] = useState('');
   const [platKendaraan, setPlatKendaraan] = useState('');
   const [palletInCount, setPalletInCount] = useState<string | number>('0');
   const [operatorForklift, setOperatorForklift] = useState('');
@@ -316,6 +338,8 @@ export const IncomingView: React.FC = () => {
     {
       materialId: materials[0]?.id || '14000049',
       namaBarang: materials[0]?.namaBarang || 'ANTIBAC014L',
+      nomorPO: '',
+      noSuratJalan: '',
       qtySuratJalan: '0',
       qtyReject: '0',
       qtyDiterima: 0,
@@ -339,14 +363,14 @@ export const IncomingView: React.FC = () => {
     setEditingId(null);
     setTanggal(today);
     setVendor('');
-    setNomorPO('');
-    setNoSuratJalan('');
     setPlatKendaraan('');
     
     const initialDetails = [
       {
         materialId: materials[0]?.id || '14000049',
         namaBarang: materials[0]?.namaBarang || 'ANTIBAC014L',
+        nomorPO: '',
+        noSuratJalan: '',
         qtySuratJalan: '0',
         qtyReject: '0',
         qtyDiterima: 0,
@@ -367,8 +391,6 @@ export const IncomingView: React.FC = () => {
     setEditingId(header.id);
     setTanggal(header.tanggal);
     setVendor(header.vendor);
-    setNomorPO(header.nomorPO);
-    setNoSuratJalan(header.noSuratJalan);
     setPlatKendaraan(header.platKendaraan);
     setPalletInCount(header.palletInCount);
 
@@ -380,6 +402,8 @@ export const IncomingView: React.FC = () => {
     setDetails(header.details.map(d => ({
       materialId: d.materialId,
       namaBarang: d.namaBarang,
+      nomorPO: d.nomorPO || header.nomorPO || '',
+      noSuratJalan: d.noSuratJalan || header.noSuratJalan || '',
       qtySuratJalan: String(d.qtySuratJalan),
       qtyReject: String(d.qtyReject),
       qtyDiterima: d.qtyDiterima,
@@ -399,11 +423,14 @@ export const IncomingView: React.FC = () => {
 
   const handleAddLineItem = () => {
     const defaultMat = materials[0];
+    const lastItem = details[details.length - 1];
     setDetails(prev => [
       ...prev,
       {
         materialId: defaultMat?.id || '14000049',
         namaBarang: defaultMat?.namaBarang || 'ANTIBAC014L',
+        nomorPO: lastItem?.nomorPO || '',
+        noSuratJalan: lastItem?.noSuratJalan || '',
         qtySuratJalan: '0',
         qtyReject: '0',
         qtyDiterima: 0,
@@ -487,14 +514,16 @@ export const IncomingView: React.FC = () => {
         qtyReject: parseVal(d.qtyReject),
         qtyDiterima: qtyD,
         jumlahPallet: finalPallet,
+        nomorPO: d.nomorPO || '',
+        noSuratJalan: d.noSuratJalan || ''
       };
     });
 
     const headerData = {
       tanggal,
       vendor,
-      nomorPO,
-      noSuratJalan,
+      nomorPO: parsedDetails[0]?.nomorPO || '',
+      noSuratJalan: parsedDetails[0]?.noSuratJalan || '',
       platKendaraan,
       palletInCount: parseVal(palletInCount),
       details: parsedDetails,
@@ -711,10 +740,26 @@ export const IncomingView: React.FC = () => {
                         <td className="p-3.5 font-mono text-slate-500 whitespace-nowrap">{h.platKendaraan || '-'}</td>
 
                         {/* No SJ */}
-                        <td className="p-3.5 text-slate-700 font-medium whitespace-nowrap">{h.noSuratJalan}</td>
+                        <td className="p-3.5">
+                          <div className="space-y-1">
+                            {h.details.map((d, i) => (
+                              <div key={i} className="text-slate-700 font-medium text-[11px] whitespace-nowrap" title={d.noSuratJalan || h.noSuratJalan}>
+                                {d.noSuratJalan || h.noSuratJalan || '-'}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
 
                         {/* No PO */}
-                        <td className="p-3.5 text-slate-500 font-mono whitespace-nowrap">{h.nomorPO}</td>
+                        <td className="p-3.5">
+                          <div className="space-y-1">
+                            {h.details.map((d, i) => (
+                              <div key={i} className="text-slate-500 font-mono text-[11px] whitespace-nowrap" title={d.nomorPO || h.nomorPO}>
+                                {d.nomorPO || h.nomorPO || '-'}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
 
                         {/* Qty Diterima */}
                         <td className="p-3.5">
@@ -780,44 +825,74 @@ export const IncomingView: React.FC = () => {
   ) : (
     <>
       {/* Driver Queue KPI Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
-            <Layers className="w-5 h-5" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
+            <Layers className="w-4 h-4" />
           </div>
           <div>
             <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Total Antrean</span>
-            <span className="text-xl font-bold text-slate-900">{driverQueues.length}</span>
+            <span className="text-lg font-bold text-slate-900">{driverQueues.length}</span>
           </div>
         </div>
         
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl shrink-0">
-            <Clock className="w-5 h-5" />
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl shrink-0">
+            <Clock className="w-4 h-4" />
           </div>
           <div>
             <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Menunggu</span>
-            <span className="text-xl font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Menunggu').length}</span>
+            <span className="text-lg font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Menunggu').length}</span>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-            <Volume2 className="w-5 h-5" />
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+            <Volume2 className="w-4 h-4" />
           </div>
           <div>
-            <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Dipanggil ke Dock</span>
-            <span className="text-xl font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Dipanggil').length}</span>
+            <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Dipanggil</span>
+            <span className="text-lg font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Dipanggil').length}</span>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
-          <div className="p-3 bg-orange-50 text-orange-600 rounded-xl shrink-0">
-            <Truck className="w-5 h-5" />
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl shrink-0">
+            <Truck className="w-4 h-4" />
           </div>
           <div>
             <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Bongkar Muat</span>
-            <span className="text-xl font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Bongkar Muat').length}</span>
+            <span className="text-lg font-bold text-slate-900">{driverQueues.filter(q => q.status === 'Bongkar Muat').length}</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl shrink-0">
+            <Boxes className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Bongkar Rawmat</span>
+            <span className="text-lg font-bold text-slate-900">{totalBongkarRawmat}</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="p-2.5 bg-cyan-50 text-cyan-600 rounded-xl shrink-0">
+            <FileText className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Bongkar Karton</span>
+            <span className="text-lg font-bold text-slate-900">{totalBongkarKarton}</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
+            <Layers className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="block text-[10px] text-slate-450 uppercase font-bold tracking-wider">Bongkar Packaging</span>
+            <span className="text-lg font-bold text-slate-900">{totalBongkarPackaging}</span>
           </div>
         </div>
       </div>
@@ -1103,30 +1178,6 @@ export const IncomingView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nomor PO Pembelian</label>
-                  <input
-                    type="text"
-                    required
-                    value={nomorPO}
-                    onChange={e => setNomorPO(e.target.value)}
-                    placeholder="Masukkan No PO Pembelian..."
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">No Surat Jalan Vendor</label>
-                  <input
-                    type="text"
-                    required
-                    value={noSuratJalan}
-                    onChange={e => setNoSuratJalan(e.target.value)}
-                    placeholder="Masukkan No SJ Vendor..."
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
-                  />
-                </div>
-
-                <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Plat Kendaraan Truk</label>
                   <input
                     type="text"
@@ -1167,7 +1218,7 @@ export const IncomingView: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleAddLineItem}
-                    className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-200 flex items-center space-x-1"
+                    className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-200 flex items-center space-x-1 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Tambah Baris Barang</span>
@@ -1176,9 +1227,10 @@ export const IncomingView: React.FC = () => {
 
                 <div className="space-y-3">
                   {details.map((item, idx) => (
-                    <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                        <div className="sm:col-span-2">
+                    <div key={idx} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                        {/* 1. Pilih Material */}
+                        <div className="sm:col-span-3">
                           <label className="block text-[11px] font-medium text-slate-600 mb-1">Pilih Material</label>
                           <MaterialSearchSelect
                             selectedId={item.materialId}
@@ -1187,8 +1239,41 @@ export const IncomingView: React.FC = () => {
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-1">Qty Surat Jalan</label>
+                        {/* 2. No PO Pembelian */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-medium text-slate-600 mb-1">No PO Pembelian</label>
+                          <input
+                            type="text"
+                            required
+                            value={item.nomorPO ?? ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setDetails(prev => prev.map((d, i) => i === idx ? { ...d, nomorPO: val } : d));
+                            }}
+                            placeholder="No PO..."
+                            className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
+                          />
+                        </div>
+
+                        {/* 3. No Surat Jalan Vendor */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-medium text-slate-600 mb-1">No Surat Jalan Vendor</label>
+                          <input
+                            type="text"
+                            required
+                            value={item.noSuratJalan ?? ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setDetails(prev => prev.map((d, i) => i === idx ? { ...d, noSuratJalan: val } : d));
+                            }}
+                            placeholder="No SJ Vendor..."
+                            className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
+                          />
+                        </div>
+
+                        {/* 4. Qty Surat Jalan */}
+                        <div className="sm:col-span-1">
+                          <label className="block text-[11px] font-medium text-slate-600 mb-1">Qty SJ</label>
                           <input
                             type="text"
                             inputMode="decimal"
@@ -1199,8 +1284,9 @@ export const IncomingView: React.FC = () => {
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-1">Qty Reject / Kurang</label>
+                        {/* 5. Qty Reject / Kurang */}
+                        <div className="sm:col-span-1">
+                          <label className="block text-[11px] font-medium text-slate-600 mb-1">Qty Reject</label>
                           <input
                             type="text"
                             inputMode="decimal"
@@ -1211,67 +1297,66 @@ export const IncomingView: React.FC = () => {
                           />
                         </div>
 
-                        {(() => {
-                          const upp = getUppPalletForMaterial(item.materialId, materials);
-                          const autoPallet = calculatePalletCount(item.qtyDiterima, item.materialId, materials);
-                          return (
-                            <div>
-                              <label className="block text-[11px] font-medium text-slate-600 mb-1 flex items-center justify-between">
-                                <span>Jumlah Pallet</span>
-                                <span className="text-[10px] text-emerald-600 font-semibold">(Manual / Auto)</span>
-                              </label>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={item.jumlahPallet ?? ''}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  setDetails(prev => prev.map((d, i) => i === idx ? { ...d, jumlahPallet: val as any } : d));
-                                }}
-                                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-semibold"
-                                placeholder={`Auto: ${autoPallet}`}
-                              />
-                              <span className="text-[10px] text-slate-500 mt-0.5 block truncate">
-                                UPP: {upp} • Auto: <strong className="text-emerald-700">{autoPallet} Plt</strong>
-                              </span>
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center pt-2 border-t border-slate-200">
-                        <div>
-                          <span className="text-[11px] text-slate-500">Qty Diterima (Bersih): </span>
-                          <span className="text-xs font-bold text-emerald-700">{item.qtyDiterima} Unit</span>
+                        {/* 6. Jumlah Pallet */}
+                        <div className="sm:col-span-1">
+                          {(() => {
+                            const autoPallet = calculatePalletCount(item.qtyDiterima, item.materialId, materials);
+                            return (
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-600 mb-1">Jml Pallet</label>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={item.jumlahPallet ?? ''}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setDetails(prev => prev.map((d, i) => i === idx ? { ...d, jumlahPallet: val as any } : d));
+                                  }}
+                                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-semibold"
+                                  placeholder={`${autoPallet}`}
+                                />
+                              </div>
+                            );
+                          })()}
                         </div>
 
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-0.5">Lokasi Simpan Target</label>
+                        {/* 7. Lokasi Simpan Target */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-medium text-slate-600 mb-1">Lokasi Target</label>
                           <select
                             value={item.lokasiSimpan}
                             onChange={e => {
                               const val = e.target.value;
                               setDetails(prev => prev.map((d, i) => i === idx ? { ...d, lokasiSimpan: val } : d));
                             }}
-                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-800"
+                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800"
                           >
-                            {gedungList.map((g, idx) => (
-                              <option key={`${g.id}-${idx}`} value={g.nama}>{g.nama} ({g.zona})</option>
+                            {gedungList.map((g, gIdx) => (
+                              <option key={`${g.id}-${gIdx}`} value={g.nama}>{g.nama}</option>
                             ))}
                           </select>
                         </div>
+                      </div>
 
-                        <div className="flex items-center justify-between">
-                          {item.qtyReject > 0 && (
+                      <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-200 gap-2">
+                        <div className="flex items-center space-x-3">
+                          <div>
+                            <span className="text-[11px] text-slate-500">Qty Diterima (Bersih): </span>
+                            <span className="text-xs font-bold text-emerald-700">{item.qtyDiterima} Unit</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2 flex-1 justify-end">
+                          {parseVal(item.qtyReject) > 0 && (
                             <input
                               type="text"
                               placeholder="Alasan Reject..."
-                              value={item.alasanReject}
+                              value={item.alasanReject || ''}
                               onChange={e => {
                                 const val = e.target.value;
                                 setDetails(prev => prev.map((d, i) => i === idx ? { ...d, alasanReject: val } : d));
                               }}
-                              className="bg-white border border-rose-300 rounded-lg px-2 py-1 text-xs text-rose-700 w-full mr-2"
+                              className="bg-white border border-rose-300 rounded-lg px-2.5 py-1 text-xs text-rose-700 max-w-xs w-full"
                             />
                           )}
 
@@ -1279,7 +1364,7 @@ export const IncomingView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleRemoveLineItem(idx)}
-                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg shrink-0 border border-rose-200 cursor-pointer"
                               title="Hapus Baris"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1287,7 +1372,6 @@ export const IncomingView: React.FC = () => {
                           )}
                         </div>
                       </div>
-
                     </div>
                   ))}
                 </div>
