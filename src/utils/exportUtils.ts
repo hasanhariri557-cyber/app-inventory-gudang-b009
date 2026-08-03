@@ -187,8 +187,9 @@ export function generateSuratJalanPDF(
     body: tableData,
     theme: 'grid',
     headStyles: { fillColor: [30, 58, 138] },
-    styles: { fillColor: [255, 255, 255] },
-    alternateRowStyles: { fillColor: [255, 255, 255] }
+    styles: { fillColor: [255, 255, 255], cellPadding: 2 },
+    alternateRowStyles: { fillColor: [255, 255, 255] },
+    margin: { bottom: 8 }
   });
 
   // Signature lines
@@ -198,18 +199,21 @@ export function generateSuratJalanPDF(
   doc.setFont('helvetica', 'normal');
 
   // 4 Kolom Tanda Tangan: Hormat Kami, Checker Outbound, Pengemudi, Penerima
-  doc.text('Hormat Kami,', 14, finalY + 20);
-  doc.text('( Gudang Pengirim )', 14, finalY + 45);
+  const sigYTitle = finalY + 10;
+  const sigYName = finalY + 30;
 
-  doc.text('Checker Outbound,', 62, finalY + 20);
+  doc.text('Hormat Kami,', 14, sigYTitle);
+  doc.text('( Gudang Pengirim )', 14, sigYName);
+
+  doc.text('Checker Outbound,', 62, sigYTitle);
   const mainChecker = outbound.details.find(d => d.picChecker)?.picChecker;
-  doc.text(`( ${mainChecker || '...........................'} )`, 62, finalY + 45);
+  doc.text(`( ${mainChecker || '...........................'} )`, 62, sigYName);
 
-  doc.text('Pengemudi / Ekspedisi,', 112, finalY + 20);
-  doc.text('(...........................)', 112, finalY + 45);
+  doc.text('Pengemudi / Ekspedisi,', 112, sigYTitle);
+  doc.text('(...........................)', 112, sigYName);
 
-  doc.text('Penerima / Customer,', 160, finalY + 20);
-  doc.text('(...........................)', 160, finalY + 45);
+  doc.text('Penerima / Customer,', 160, sigYTitle);
+  doc.text('(...........................)', 160, sigYName);
 
   doc.save(`SuratJalan_${outbound.nomorDOSJ}.pdf`);
 }
