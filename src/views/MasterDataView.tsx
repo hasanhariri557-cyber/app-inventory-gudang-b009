@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Package, Plus, Search, Filter, Edit3, Trash2, CheckCircle2, XCircle, FileSpreadsheet, AlertCircle, Upload, MapPin } from 'lucide-react';
+import { Package, Plus, Search, Filter, Edit3, Trash2, CheckCircle2, XCircle, FileSpreadsheet, AlertCircle, Upload, MapPin, Download } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { Material } from '../types';
 import { exportToExcel } from '../utils/exportUtils';
@@ -204,6 +204,33 @@ export const MasterDataView: React.FC = () => {
     showNotification('Ekspor Excel Berhasil', `Data ${filteredMaterials.length} material berhasil diunduh dalam format Excel.`, 'success', 'Master Data Barang');
   };
 
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      {
+        'Material ID': 'RM-NP-001',
+        'Nama Barang': 'PARFUM ROSE 100ML',
+        'Kategori': 'RM NON PARFUM',
+        'Satuan': 'KG',
+        'Gedung': 'Gedung A1',
+        'UPP Pallet': 1000,
+        'Stok Sistem': 500,
+        'Status': 'Aktif'
+      },
+      {
+        'Material ID': 'RM-PF-002',
+        'Nama Barang': 'ESSENCE JASMINE SUPER',
+        'Kategori': 'RM PARFUM',
+        'Satuan': 'KG',
+        'Gedung': 'Gedung B2',
+        'UPP Pallet': 500,
+        'Stok Sistem': 250,
+        'Status': 'Aktif'
+      }
+    ];
+    exportToExcel(templateData, 'Template_Master_Data_Barang', 'Template Material');
+    showNotification('Download Template Berhasil', 'Template Excel Master Data Barang berhasil diunduh.', 'success', 'Master Data Barang');
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -216,23 +243,37 @@ export const MasterDataView: React.FC = () => {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
 
+      let successCount = 0;
       jsonData.forEach((row) => {
+        const materialId = row['Material ID'] || row['MaterialId'] || row['ID'];
+        const namaBarang = row['Nama Barang'] || row['NamaBarang'] || row['Nama'];
+        if (!materialId || !namaBarang) return;
+
+        const kategori = row['Kategori'] || row['Category'] || 'RM NON PARFUM';
+        const satuan = row['Satuan'] || row['Unit'] || 'PCS';
+        const gedung = row['Gedung'] || row['Lokasi Default'] || row['LokasiDefaut'] || 'Gedung A1';
+        const uppPallet = Number(row['UPP Pallet'] || row['UppPallet']) || 1000;
+        const stokSistem = Number(row['Stok Sistem'] || row['Stok Saat Ini'] || row['CurrentStock']) || 0;
+        const statusRaw = row['Status'] || row['Status Aktif'] || 'Aktif';
+        const statusAktif = typeof statusRaw === 'string' ? statusRaw.toLowerCase() === 'aktif' || statusRaw.toLowerCase() === 'active' || statusRaw === '1' : Boolean(statusRaw);
+
         const newMaterial: Material = {
-          id: row['Material ID'],
-          namaBarang: row['Nama Barang'],
-          kategori: row['Kategori'],
-          satuan: row['Satuan'],
-          uppPallet: row['UPP Pallet'] || 1000,
-          minStock: row['Stok Minimum'] || 0,
-          maxStock: row['Stok Maksimum'] || 1000,
-          currentStock: row['Stok Saat Ini'] || 0,
-          lokasiDefaut: row['Lokasi Default'] || 'Gedung A1',
-          statusAktif: row['Status Aktif'] === 'Aktif',
+          id: String(materialId).trim().toUpperCase(),
+          namaBarang: String(namaBarang).trim(),
+          kategori: String(kategori).trim(),
+          satuan: String(satuan).trim(),
+          uppPallet: uppPallet,
+          minStock: Number(row['Stok Minimum'] || row['MinStock']) || 0,
+          maxStock: Number(row['Stok Maksimum'] || row['MaxStock']) || 1000,
+          currentStock: stokSistem,
+          lokasiDefaut: String(gedung).trim(),
+          statusAktif: statusAktif,
         };
         addMaterial(newMaterial);
+        successCount++;
       });
 
-      showNotification('Upload Sukses', `${jsonData.length} material berhasil ditambahkan.`, 'success', 'Master Data Barang');
+      showNotification('Upload Sukses', `${successCount} material berhasil ditambahkan.`, 'success', 'Master Data Barang');
     };
     reader.readAsBinaryString(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -258,6 +299,14 @@ export const MasterDataView: React.FC = () => {
         <div className="flex items-center space-x-2">
           {currentUser.role === 'Admin' && (
             <>
+              <button
+                onClick={handleDownloadTemplate}
+                className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
+                title="Download Template Excel Master Data"
+              >
+                <Download className="w-4 h-4 text-emerald-600" />
+                <span>Download Template Excel</span>
+              </button>
               <input
                 type="file"
                 ref={fileInputRef}
