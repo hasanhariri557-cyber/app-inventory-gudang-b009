@@ -124,8 +124,8 @@ interface WmsContextType {
   };
 
   // Actions
-  addMaterial: (m: Omit<Material, 'id' | 'currentStock'> & { id?: string; currentStock?: number }) => void;
-  updateMaterial: (id: string, m: Partial<Material>) => void;
+  addMaterial: (m: Omit<Material, 'id' | 'currentStock'> & { id?: string; currentStock?: number }) => Promise<void>;
+  updateMaterial: (id: string, m: Partial<Material>) => Promise<void>;
   deleteMaterial: (id: string) => void;
   
   addIncoming: (header: Omit<IncomingHeader, 'id' | 'noReceiving'>) => void;
@@ -1114,7 +1114,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Handlers
-  const addMaterial = (m: Omit<Material, 'id' | 'currentStock'> & { id?: string; currentStock?: number }) => {
+  const addMaterial = async (m: Omit<Material, 'id' | 'currentStock'> & { id?: string; currentStock?: number }) => {
     let nextId = m.id && m.id.trim() ? m.id.trim().toUpperCase() : '';
     if (!nextId) {
       const maxId = materials.reduce((max, mat) => {
@@ -1137,6 +1137,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const initialStock = m.currentStock || 0;
     const newMat: Material = { ...m, id: nextId, currentStock: initialStock };
     setMaterials(prev => [...prev, newMat]);
+    await saveToFirestore('materials', nextId, newMat);
 
     if (initialStock > 0) {
       const newEntry: KartuStockEntry = {
@@ -1157,7 +1158,8 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Data Material Berhasil Disimpan', `Material ID: ${nextId} (${m.namaBarang}) telah tersimpan ke Master Data.`, 'success', 'Master Data Barang');
   };
 
-  const updateMaterial = (id: string, m: Partial<Material>) => {
+  const updateMaterial = async (id: string, m: Partial<Material>) => {
+    let updatedMat: Material | null = null;
     setMaterials(prev => {
       return prev.map(item => {
         if (item.id === id) {
@@ -1180,11 +1182,15 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             };
             setKartuStocks(prevKartu => [newEntry, ...prevKartu]);
           }
-          return { ...item, ...m };
+          updatedMat = { ...item, ...m };
+          return updatedMat;
         }
         return item;
       });
     });
+    if (updatedMat) {
+      await saveToFirestore('materials', id, updatedMat);
+    }
     showNotification('Data Material Berhasil Diperbarui', `Perubahan data material ${id} berhasil disimpan.`, 'success', 'Master Data Barang');
   };
 

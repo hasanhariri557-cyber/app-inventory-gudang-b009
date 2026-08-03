@@ -34,6 +34,7 @@ export const MasterDataView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [deletingMaterial, setDeletingMaterial] = useState<Material | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Quick Edit Lokasi Modal State
   const [quickEditMat, setQuickEditMat] = useState<Material | null>(null);
@@ -130,7 +131,7 @@ export const MasterDataView: React.FC = () => {
     const parsedUpp = parseVal(uppPallet) || 1000;
 
     if (editingMaterial) {
-      updateMaterial(editingMaterial.id, {
+      await updateMaterial(editingMaterial.id, {
         namaBarang,
         kategori,
         satuan,
@@ -145,7 +146,7 @@ export const MasterDataView: React.FC = () => {
         await quickUpdateMaterialLocations(editingMaterial.id, modalAllocations, lokasiDefaut);
       }
     } else {
-      addMaterial({
+      await addMaterial({
         id: materialId.trim(),
         namaBarang,
         kategori,
@@ -162,10 +163,12 @@ export const MasterDataView: React.FC = () => {
       }
     }
 
+    setRefreshKey(prev => prev + 1);
     setIsModalOpen(false);
   };
 
   const filteredMaterials = materials.filter(m => {
+    const _rk = refreshKey;
     const matchSearch = m.id.toLowerCase().includes(search.toLowerCase()) || m.namaBarang.toLowerCase().includes(search.toLowerCase());
     const matchCat = selectedCategory === 'ALL' || m.kategori === selectedCategory;
     
