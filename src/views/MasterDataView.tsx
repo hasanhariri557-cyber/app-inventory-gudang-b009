@@ -15,11 +15,36 @@ export const MasterDataView: React.FC = () => {
     gedungList,
     addMaterial, 
     updateMaterial, 
-    deleteMaterial, 
+    deleteMaterial,
+    bulkDeleteMaterials,
+    bulkRecalculateStock,
+    bulkUpdateMaterialsLocationOrCategory,
     showNotification, 
     getMaterialStockByGedung,
     quickUpdateMaterialLocations 
   } = useWms();
+
+  const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>([]);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isBulkUpdateLocationModalOpen, setIsBulkUpdateLocationModalOpen] = useState(false);
+  const [bulkCategory, setBulkCategory] = useState<string>('ALL');
+  const [bulkGedung, setBulkGedung] = useState<string>('Gedung A1');
+  const [bulkUpp, setBulkUpp] = useState<string>('1000');
+  const [bulkApplyMode, setBulkApplyMode] = useState<'selected' | 'category'>('selected');
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedMaterialIds(filteredMaterials.map(m => m.id));
+    } else {
+      setSelectedMaterialIds([]);
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedMaterialIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -296,9 +321,35 @@ export const MasterDataView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 flex-wrap gap-2">
           {currentUser.role === 'Admin' && (
             <>
+              {selectedMaterialIds.length > 0 && (
+                <button
+                  onClick={() => setIsBulkDeleteModalOpen(true)}
+                  className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-xl border border-rose-200 shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
+                  title="Hapus Material Terpilih"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-600" />
+                  <span>Hapus Massal ({selectedMaterialIds.length})</span>
+                </button>
+              )}
+              <button
+                onClick={() => bulkRecalculateStock(selectedMaterialIds.length > 0 ? selectedMaterialIds : undefined)}
+                className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
+                title="Update Stok Massal (Rekalkulasi dari Qty Gedung)"
+              >
+                <Package className="w-4 h-4 text-indigo-600" />
+                <span>Update Stok Massal</span>
+              </button>
+              <button
+                onClick={() => setIsBulkUpdateLocationModalOpen(true)}
+                className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
+                title="Update Lokasi & UPP Pallet Massal"
+              >
+                <MapPin className="w-4 h-4 text-emerald-600" />
+                <span>Update Lokasi Massal</span>
+              </button>
               <button
                 onClick={handleDownloadTemplate}
                 className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
@@ -377,6 +428,14 @@ export const MasterDataView: React.FC = () => {
           <table className="w-full text-left text-xs text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
               <tr>
+                <th className="p-3.5 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filteredMaterials.length > 0 && selectedMaterialIds.length === filteredMaterials.length}
+                    onChange={handleSelectAll}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  />
+                </th>
                 <th className="p-3.5">Material ID</th>
                 <th className="p-3.5">Nama Barang</th>
                 <th className="p-3.5">Kategori</th>
@@ -388,6 +447,7 @@ export const MasterDataView: React.FC = () => {
                 <th className="p-3.5 text-center">Aksi</th>
               </tr>
               <tr className="bg-slate-100/50 border-b border-slate-200">
+                <td className="p-2 text-center"></td>
                 <td className="p-2">
                   <input
                     type="text"
@@ -472,7 +532,15 @@ export const MasterDataView: React.FC = () => {
                   const activeBuildings = Object.entries(bStocks).filter(([_, qty]) => (qty as number) > 0);
 
                   return (
-                    <tr key={`${m.id}-${idx}`} className="hover:bg-slate-50 transition-colors">
+                    <tr key={`${m.id}-${idx}`} className={`hover:bg-slate-50 transition-colors ${selectedMaterialIds.includes(m.id) ? 'bg-indigo-50/40' : ''}`}>
+                      <td className="p-3.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedMaterialIds.includes(m.id)}
+                          onChange={() => handleToggleSelect(m.id)}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                      </td>
                       <td className="p-3.5 font-mono font-bold text-indigo-600">{m.id}</td>
                       <td className="p-3.5 font-semibold text-slate-900">{m.namaBarang}</td>
                       <td className="p-3.5">
@@ -776,6 +844,149 @@ export const MasterDataView: React.FC = () => {
                 className="w-1/2 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-rose-600/20 transition-all cursor-pointer"
               >
                 Hapus Sekarang
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BULK DELETE CONFIRMATION MODAL */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 text-center">
+            <div className="w-12 h-12 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-center mx-auto mb-4 text-rose-600">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mb-1">Konfirmasi Hapus Massal</h3>
+            <p className="text-xs text-slate-600 mb-6 leading-relaxed">
+              Apakah Anda yakin ingin menghapus <strong className="text-slate-900 font-bold">{selectedMaterialIds.length}</strong> material terpilih dari sistem? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                className="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                onClick={async () => {
+                  await bulkDeleteMaterials(selectedMaterialIds);
+                  setSelectedMaterialIds([]);
+                  setIsBulkDeleteModalOpen(false);
+                }}
+                className="w-1/2 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-rose-600/20 transition-all cursor-pointer"
+              >
+                Hapus ({selectedMaterialIds.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BULK UPDATE LOCATION MODAL */}
+      {isBulkUpdateLocationModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 flex flex-col">
+            <div className="flex items-center space-x-2 text-indigo-600 mb-4">
+              <MapPin className="w-6 h-6" />
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Update Lokasi Gedung & UPP Massal</h3>
+                <p className="text-xs text-slate-500">Perbarui lokasi gedung default dan UPP Pallet secara massal</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Target Sasaran Material</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBulkApplyMode('selected')}
+                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
+                      bulkApplyMode === 'selected' 
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    Item Terpilih ({selectedMaterialIds.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkApplyMode('category')}
+                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
+                      bulkApplyMode === 'category' 
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    Berdasarkan Kategori
+                  </button>
+                </div>
+              </div>
+
+              {bulkApplyMode === 'category' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Pilih Kategori Material</label>
+                  <select
+                    value={bulkCategory}
+                    onChange={e => setBulkCategory(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="ALL">Semua Kategori (Seluruh Material)</option>
+                    {categories.map((c, idx) => (
+                      <option key={`${c.id}-${idx}`} value={c.nama}>{c.nama}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Gedung Tujuan (Lokasi Default)</label>
+                <select
+                  value={bulkGedung}
+                  onChange={e => setBulkGedung(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                >
+                  {gedungList.map(g => (
+                    <option key={g.id} value={g.nama}>{g.nama}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Kapasitas UPP Pallet</label>
+                <input
+                  type="number"
+                  value={bulkUpp}
+                  onChange={e => setBulkUpp(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-mono focus:outline-none focus:border-indigo-500"
+                  placeholder="1000"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsBulkUpdateLocationModalOpen(false)}
+                className="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer text-center"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await bulkUpdateMaterialsLocationOrCategory({
+                    category: bulkApplyMode === 'category' ? bulkCategory : undefined,
+                    targetGedung: bulkGedung,
+                    targetUpp: parseFloat(bulkUpp) || 1000,
+                    targetIds: bulkApplyMode === 'selected' ? selectedMaterialIds : undefined
+                  });
+                  setIsBulkUpdateLocationModalOpen(false);
+                }}
+                className="w-1/2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-indigo-600/20 transition-all cursor-pointer text-center"
+              >
+                Terapkan Update
               </button>
             </div>
           </div>

@@ -127,6 +127,9 @@ interface WmsContextType {
   addMaterial: (m: Omit<Material, 'id' | 'currentStock'> & { id?: string; currentStock?: number }) => Promise<void>;
   updateMaterial: (id: string, m: Partial<Material>) => Promise<void>;
   deleteMaterial: (id: string) => void;
+  bulkDeleteMaterials: (ids: string[]) => Promise<void>;
+  bulkRecalculateStock: (targetIds?: string[]) => Promise<void>;
+  bulkUpdateMaterialsLocationOrCategory: (params: { category?: string; targetGedung?: string; targetUpp?: number; targetIds?: string[] }) => Promise<void>;
   
   addIncoming: (header: Omit<IncomingHeader, 'id' | 'noReceiving'>) => void;
   updateIncoming: (id: string, header: Omit<IncomingHeader, 'id' | 'noReceiving'>) => void;
@@ -1199,6 +1202,66 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setMaterials(prev => prev.filter(item => item.id !== id));
     await deleteFromFirestore('materials', id);
     showNotification('Data Material Dihapus', `Material ID ${id} telah dihapus dari sistem.`, 'info', 'Master Data Barang');
+  };
+
+  const bulkDeleteMaterials = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    ids.forEach(id => recentlyDeletedIdsRef.current.add(id));
+    setMaterials(prev => prev.filter(item => !ids.includes(item.id)));
+    for (const id of ids) {
+      await deleteFromFirestore('materials', id);
+    }
+    showNotification('Hapus Massal Berhasil', `${ids.length} material terpilih berhasil dihapus dari sistem.`, 'info', 'Master Data Barang');
+  };
+
+  const bulkRecalculateStock = async (targetIds?: string[]) => {
+    let count = 0;
+    setMaterials(prev => {
+      return prev.map(mat => {
+        if (targetIds && targetIds.length > 0 && !targetIds.includes(mat.id)) return mat;
+        const bStocks = getMaterialStockByGedung(mat.id);
+        const sumStock = Object.values(bStocks).reduce((acc: number, q: any) => acc + (Number(q) || 0), 0);
+        if (sumStock !== mat.currentStock) {
+          count++;
+          const updated = { ...mat, currentStock: sumStock };
+          saveToFirestore('materials', mat.id, updated);
+          return updated;
+        }
+        return mat;
+      });
+    });
+    showNotification('Update Stok Massal Selesai', `Sinkronisasi stok sistem berhasil dilakukan (diperbarui: ${count} material) berdasarkan rincian gedung tanpa mengubah alokasi gudang.`, 'success', 'Master Data Barang');
+  };
+
+  const bulkUpdateMaterialsLocationOrCategory = async (params: {
+    category?: string;
+    targetGedung?: string;
+    targetUpp?: number;
+    targetIds?: string[];
+  }) => {
+    let updatedCount = 0;
+    setMaterials(prev => {
+      return prev.map(mat => {
+        const isSelected = params.targetIds && params.targetIds.length > 0 ? params.targetIds.includes(mat.id) : true;
+        const matchesCat = !params.category || params.category === 'ALL' || mat.kategori === params.category;
+        
+        if (isSelected && matchesCat) {
+          const updates: Partial<Material> = {};
+          if (params.targetGedung) updates.lokasiDefaut = params.targetGedung;
+          if (params.targetUpp !== undefined && params.targetUpp !== null && !isNaN(params.targetUpp)) {
+            updates.uppPallet = params.targetUpp;
+          }
+          if (Object.keys(updates).length > 0) {
+            updatedCount++;
+            const updated = { ...mat, ...updates };
+            saveToFirestore('materials', mat.id, updated);
+            return updated;
+          }
+        }
+        return mat;
+      });
+    });
+    showNotification('Update Lokasi/Kategori Massal Berhasil', `Berhasil memperbarui ${updatedCount} material.`, 'success', 'Master Data Barang');
   };
 
   const registerDriverQueue = async (driver: { platNomor: string; namaSupir: string; namaVendor: string; noPoSJ?: string; noHp: string; jenisBarang: string; aktivitas?: 'Bongkar' | 'Muat' }) => {
@@ -2305,6 +2368,9 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addMaterial,
       updateMaterial,
       deleteMaterial,
+      bulkDeleteMaterials,
+      bulkRecalculateStock,
+      bulkUpdateMaterialsLocationOrCategory,
       addIncoming,
       updateIncoming,
       updateRejectStatus,
