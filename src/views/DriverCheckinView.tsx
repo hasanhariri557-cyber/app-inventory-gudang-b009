@@ -125,21 +125,21 @@ export const DriverCheckinView: React.FC = () => {
   const aheadCount = getQueuePosition() - 1;
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-between p-4 sm:p-6 select-none font-sans">
+    <div className="min-h-screen bg-white text-slate-900 flex flex-col justify-between p-4 sm:p-6 select-none font-sans">
       
       {/* Mini Header / Brand */}
-      <header className="w-full max-w-md mx-auto pt-4 pb-6 flex items-center justify-between border-b border-slate-800">
+      <header className="w-full max-w-md mx-auto pt-4 pb-6 flex items-center justify-between border-b border-slate-200">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
             <Truck className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-base font-bold tracking-tight text-white">{appTitle || 'WMS GUDANG'}</h1>
-            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Gate & Yard Management</p>
+            <h1 className="text-base font-bold tracking-tight text-slate-900">{appTitle || 'WMS GUDANG'}</h1>
+            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Gate & Yard Management</p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
           ONLINE
         </div>
       </header>
@@ -151,14 +151,14 @@ export const DriverCheckinView: React.FC = () => {
           /* REGISTRATION FORM */
           <div className="space-y-6">
             <div className="space-y-2 text-center">
-              <h2 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Pendaftaran Supir</h2>
-              <p className="text-sm text-slate-400 max-w-xs mx-auto">
+              <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">Pendaftaran Supir</h2>
+              <p className="text-sm text-slate-500 max-w-xs mx-auto">
                 Silakan isi data kendaraan dan vendor untuk mendapatkan nomor antrean bongkar muat.
               </p>
             </div>
 
             {errorMessage && (
-              <div className="p-3.5 bg-rose-500/15 border border-rose-500/35 rounded-2xl text-rose-300 text-xs font-semibold">
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs font-semibold">
                 {errorMessage}
               </div>
             )}
@@ -167,15 +167,15 @@ export const DriverCheckinView: React.FC = () => {
               
               {/* Jenis Aktivitas Segmented Button */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">Jenis Aktivitas</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider">Jenis Aktivitas</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setAktivitas('Bongkar')}
                     className={`py-3 px-4 rounded-2xl border text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
                       aktivitas === 'Bongkar'
-                        ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400 shadow-lg shadow-emerald-500/5'
-                        : 'bg-slate-800/65 border-slate-750 text-slate-400 hover:text-slate-300'
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-700 shadow-sm'
+                        : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-700'
                     }`}
                   >
                     <span className="text-[10px] opacity-75">BONGKAR BARANG</span>
@@ -186,8 +186,8 @@ export const DriverCheckinView: React.FC = () => {
                     onClick={() => setAktivitas('Muat')}
                     className={`py-3 px-4 rounded-2xl border text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
                       aktivitas === 'Muat'
-                        ? 'bg-amber-600/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/5'
-                        : 'bg-slate-800/65 border-slate-750 text-slate-400 hover:text-slate-300'
+                        ? 'bg-amber-50 border-amber-400 text-amber-700 shadow-sm'
+                        : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-700'
                     }`}
                   >
                     <span className="text-[10px] opacity-75">MUAT BARANG</span>
@@ -198,9 +198,9 @@ export const DriverCheckinView: React.FC = () => {
 
               {/* Plat Kendaraan */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">Plat Nomor Kendaraan</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider">Plat Nomor Kendaraan</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <Navigation className="w-4 h-4" />
                   </div>
                   <input
@@ -209,16 +209,16 @@ export const DriverCheckinView: React.FC = () => {
                     placeholder="Contoh: B 1234 CD"
                     value={platNomor}
                     onChange={(e) => setPlatNomor(e.target.value)}
-                    className="block w-full pl-11 pr-4 py-3.5 bg-slate-800/80 border border-slate-750 rounded-2xl text-white placeholder-slate-500 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 uppercase transition-all duration-200"
+                    className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 uppercase transition-all duration-200"
                   />
                 </div>
               </div>
 
               {/* Nama Supir */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">Nama Lengkap Supir</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider">Nama Lengkap Supir</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <User className="w-4 h-4" />
                   </div>
                   <input
@@ -227,16 +227,16 @@ export const DriverCheckinView: React.FC = () => {
                     placeholder="Masukkan nama supir"
                     value={namaSupir}
                     onChange={(e) => setNamaSupir(e.target.value)}
-                    className="block w-full pl-11 pr-4 py-3.5 bg-slate-800/80 border border-slate-750 rounded-2xl text-white placeholder-slate-500 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                    className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
                   />
                 </div>
               </div>
 
               {/* Nama Vendor */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">Nama Perusahaan / Vendor</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider">Nama Perusahaan / Vendor</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <Truck className="w-4 h-4" />
                   </div>
                   <input
@@ -245,16 +245,16 @@ export const DriverCheckinView: React.FC = () => {
                     placeholder="Masukkan nama perusahaan"
                     value={namaVendor}
                     onChange={(e) => setNamaVendor(e.target.value)}
-                    className="block w-full pl-11 pr-4 py-3.5 bg-slate-800/80 border border-slate-750 rounded-2xl text-white placeholder-slate-500 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                    className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
                   />
                 </div>
               </div>
 
               {/* No HP */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">No. HP / WhatsApp</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider">No. HP / WhatsApp</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <Phone className="w-4 h-4" />
                   </div>
                   <input
@@ -263,16 +263,16 @@ export const DriverCheckinView: React.FC = () => {
                     placeholder="Contoh: 081234567890"
                     value={noHp}
                     onChange={(e) => setNoHp(e.target.value)}
-                    className="block w-full pl-11 pr-4 py-3.5 bg-slate-800/80 border border-slate-750 rounded-2xl text-white placeholder-slate-500 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                    className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
                   />
                 </div>
               </div>
 
               {/* Jenis Barang */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">Jenis Barang Bawaan</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider">Jenis Barang Bawaan</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <Package className="w-4 h-4" />
                   </div>
                   <select
@@ -284,29 +284,29 @@ export const DriverCheckinView: React.FC = () => {
                         setCustomJenisBarang('');
                       }
                     }}
-                    className="block w-full pl-11 pr-10 py-3.5 bg-slate-800/80 border border-slate-750 rounded-2xl text-white placeholder-slate-500 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 appearance-none cursor-pointer"
+                    className="block w-full pl-11 pr-10 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 appearance-none cursor-pointer"
                   >
                     <option value="" disabled className="text-slate-500">-- Pilih Jenis Barang --</option>
                     {(jenisBarangOptions || []).map(opt => (
-                      <option key={opt.id} value={opt.nama} className="text-white bg-slate-800">{opt.nama}</option>
+                      <option key={opt.id} value={opt.nama} className="text-slate-900 bg-white">{opt.nama}</option>
                     ))}
-                    <option value="Lainnya" className="text-white bg-slate-800">Lainnya (Ketik Manual)...</option>
+                    <option value="Lainnya" className="text-slate-900 bg-white">Lainnya (Ketik Manual)...</option>
                   </select>
-                  <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-500">
+                  <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
                   </div>
                 </div>
 
                 {jenisBarang === 'Lainnya' && (
                   <div className="mt-2.5 space-y-1 animate-fadeIn">
-                    <label className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Ketik Jenis Barang Manual</label>
+                    <label className="block text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Ketik Jenis Barang Manual</label>
                     <input
                       type="text"
                       required
                       placeholder="Contoh: Pallet Kayu, Roll Film, dll."
                       value={customJenisBarang}
                       onChange={(e) => setCustomJenisBarang(e.target.value)}
-                      className="block w-full px-4 py-3 bg-slate-800/80 border border-indigo-500/50 rounded-2xl text-white placeholder-slate-500 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                      className="block w-full px-4 py-3 bg-slate-50 border border-indigo-300 rounded-2xl text-slate-900 placeholder-slate-400 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
                     />
                   </div>
                 )}
@@ -342,24 +342,24 @@ export const DriverCheckinView: React.FC = () => {
           <div className="space-y-6">
             
             {/* Visual Card Ticket */}
-            <div className="bg-gradient-to-b from-slate-800 to-slate-850 rounded-3xl border border-slate-750 shadow-2xl shadow-indigo-950/10 overflow-hidden relative">
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-xl shadow-indigo-950/5 overflow-hidden relative">
               
               {/* Decorative line circles */}
-              <div className="absolute top-1/2 -left-3 w-6 h-6 rounded-full bg-slate-900 border-r border-slate-750 -translate-y-1/2"></div>
-              <div className="absolute top-1/2 -right-3 w-6 h-6 rounded-full bg-slate-900 border-l border-slate-750 -translate-y-1/2"></div>
+              <div className="absolute top-1/2 -left-3 w-6 h-6 rounded-full bg-white border-r border-slate-200 -translate-y-1/2"></div>
+              <div className="absolute top-1/2 -right-3 w-6 h-6 rounded-full bg-white border-l border-slate-200 -translate-y-1/2"></div>
               
               {/* Top part */}
-              <div className="p-6 text-center border-b border-dashed border-slate-700/60 pb-8">
-                <p className="text-xs font-extrabold text-indigo-400 uppercase tracking-widest mb-1.5">Tiket Antrean Supir</p>
-                <h3 className="text-7xl font-black text-white tracking-tighter my-2 drop-shadow-md">{activeQueueItem.noAntrian}</h3>
+              <div className="p-6 text-center border-b border-dashed border-slate-200 pb-8">
+                <p className="text-xs font-extrabold text-indigo-600 uppercase tracking-widest mb-1.5">Tiket Antrean Supir</p>
+                <h3 className="text-7xl font-black text-slate-900 tracking-tighter my-2 drop-shadow-sm">{activeQueueItem.noAntrian}</h3>
                 
-                <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-900/65 border border-slate-750">
-                  <span className="text-[11px] text-slate-400 font-medium">Status Anda:</span>
+                <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-50 border border-slate-100">
+                  <span className="text-[11px] text-slate-500 font-medium">Status Anda:</span>
                   <span className={`text-xs font-extrabold uppercase px-2 py-0.5 rounded-lg ${
-                    activeQueueItem.status === 'Menunggu' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                    activeQueueItem.status === 'Dipanggil' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                    activeQueueItem.status === 'Bongkar Muat' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
-                    'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    activeQueueItem.status === 'Menunggu' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                    activeQueueItem.status === 'Dipanggil' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                    activeQueueItem.status === 'Bongkar Muat' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                    'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   }`}>
                     {activeQueueItem.status === 'Dipanggil' ? 'Dipanggil ke Dock' : activeQueueItem.status}
                   </span>
@@ -371,73 +371,73 @@ export const DriverCheckinView: React.FC = () => {
                 
                  {/* Meta details */}
                 <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-xs">
-                  <div className="col-span-2 pb-2 border-b border-slate-750/50 flex justify-between items-center">
+                  <div className="col-span-2 pb-2 border-b border-slate-100 flex justify-between items-center">
                     <div>
-                      <span className="block text-[10px] text-slate-450 uppercase font-semibold">Jenis Aktivitas</span>
-                      <span className={`text-xs font-black uppercase ${activeQueueItem.aktivitas === 'Muat' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                      <span className="block text-[10px] text-slate-500 uppercase font-semibold">Jenis Aktivitas</span>
+                      <span className={`text-xs font-black uppercase ${activeQueueItem.aktivitas === 'Muat' ? 'text-amber-700' : 'text-emerald-700'}`}>
                         {activeQueueItem.aktivitas === 'Muat' ? 'MUAT BARANG (Outbound)' : 'BONGKAR BARANG (Incoming)'}
                       </span>
                     </div>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      activeQueueItem.aktivitas === 'Muat' ? 'bg-amber-400/10 text-amber-400 border border-amber-500/20' : 'bg-emerald-400/10 text-emerald-400 border border-emerald-500/20'
+                      activeQueueItem.aktivitas === 'Muat' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                     }`}>
                       {activeQueueItem.aktivitas === 'Muat' ? 'MUAT' : 'BONGKAR'}
                     </span>
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-450 uppercase font-semibold">Supir</span>
-                    <span className="font-bold text-white truncate block">{activeQueueItem.namaSupir}</span>
+                    <span className="block text-[10px] text-slate-500 uppercase font-semibold">Supir</span>
+                    <span className="font-bold text-slate-900 truncate block">{activeQueueItem.namaSupir}</span>
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-450 uppercase font-semibold">Plat Nomor</span>
-                    <span className="font-bold text-white truncate block uppercase">{activeQueueItem.platNomor}</span>
+                    <span className="block text-[10px] text-slate-500 uppercase font-semibold">Plat Nomor</span>
+                    <span className="font-bold text-slate-900 truncate block uppercase">{activeQueueItem.platNomor}</span>
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-450 uppercase font-semibold">Vendor / Ekspedisi</span>
-                    <span className="font-bold text-white truncate block">{activeQueueItem.namaVendor}</span>
+                    <span className="block text-[10px] text-slate-500 uppercase font-semibold">Vendor / Ekspedisi</span>
+                    <span className="font-bold text-slate-900 truncate block">{activeQueueItem.namaVendor}</span>
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-450 uppercase font-semibold">No. HP</span>
-                    <span className="font-bold text-white truncate block">{activeQueueItem.noHp}</span>
+                    <span className="block text-[10px] text-slate-500 uppercase font-semibold">No. HP</span>
+                    <span className="font-bold text-slate-900 truncate block">{activeQueueItem.noHp}</span>
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-450 uppercase font-semibold">Jenis Barang</span>
-                    <span className="font-bold text-white truncate block">{activeQueueItem.jenisBarang}</span>
+                    <span className="block text-[10px] text-slate-500 uppercase font-semibold">Jenis Barang</span>
+                    <span className="font-bold text-slate-900 truncate block">{activeQueueItem.jenisBarang}</span>
                   </div>
                 </div>
 
                 {/* Live Position Ahead */}
                 {activeQueueItem.status === 'Menunggu' && (
-                  <div className="mt-6 p-4 bg-indigo-600/10 border border-indigo-500/20 rounded-2xl text-center">
-                    <p className="text-[11px] text-indigo-300 font-semibold uppercase tracking-wider mb-0.5">Posisi Antrean</p>
-                    <p className="text-sm font-bold text-white">
+                  <div className="mt-6 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl text-center">
+                    <p className="text-[11px] text-indigo-700 font-semibold uppercase tracking-wider mb-0.5">Posisi Antrean</p>
+                    <p className="text-sm font-bold text-slate-900">
                       {aheadCount > 0 ? (
-                        <>Ada <span className="text-lg text-indigo-400 font-black px-1">{aheadCount}</span> truk sebelum Anda</>
+                        <>Ada <span className="text-lg text-indigo-700 font-black px-1">{aheadCount}</span> truk sebelum Anda</>
                       ) : (
-                        <span className="text-emerald-400 font-black text-xs uppercase tracking-wide">Truk Anda di baris antrean berikutnya!</span>
+                        <span className="text-emerald-700 font-black text-xs uppercase tracking-wide">Truk Anda di baris antrean berikutnya!</span>
                       )}
                     </p>
                   </div>
                 )}
 
                 {/* Guidance description */}
-                <div className="p-3.5 bg-slate-900/40 rounded-2xl border border-slate-750/50 flex gap-3 text-xs leading-relaxed text-slate-300">
-                  <div className="p-1 bg-indigo-500/10 text-indigo-400 rounded-xl h-fit">
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex gap-3 text-xs leading-relaxed text-slate-700">
+                  <div className="p-1 bg-indigo-100 text-indigo-600 rounded-xl h-fit">
                     <ClipboardList className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="font-bold text-white mb-0.5">Petunjuk Operasional:</p>
+                    <p className="font-bold text-slate-900 mb-0.5">Petunjuk Operasional:</p>
                     {activeQueueItem.status === 'Menunggu' && (
-                      <p className="text-slate-400 text-[11px]">Silakan parkir dengan tertib di area yard yang ditentukan. Halaman ini akan diperbarui secara real-time saat Anda dipanggil.</p>
+                      <p className="text-slate-600 text-[11px]">Silakan parkir dengan tertib di area yard yang ditentukan. Halaman ini akan diperbarui secara real-time saat Anda dipanggil.</p>
                     )}
                     {activeQueueItem.status === 'Dipanggil' && (
-                      <p className="text-blue-300 font-semibold text-[11px] animate-pulse">Panggilan Masuk! Silakan segera arahkan truk Anda menuju pintu gerbang docking penerimaan barang.</p>
+                      <p className="text-blue-700 font-semibold text-[11px] animate-pulse">Panggilan Masuk! Silakan segera arahkan truk Anda menuju pintu gerbang docking penerimaan barang.</p>
                     )}
                     {activeQueueItem.status === 'Bongkar Muat' && (
-                      <p className="text-orange-300 font-semibold text-[11px]">Proses Bongkar Muat Sedang Berlangsung. Mohon tetap berada di luar kabin dan utamakan keselamatan kerja K3.</p>
+                      <p className="text-orange-700 font-semibold text-[11px]">Proses Bongkar Muat Sedang Berlangsung. Mohon tetap berada di luar kabin dan utamakan keselamatan kerja K3.</p>
                     )}
                     {activeQueueItem.status === 'Selesai' && (
-                      <p className="text-emerald-300 font-semibold text-[11px]">Bongkar muat selesai! Silakan ambil dokumen tanda terima di pos, lalu keluar gate secara tertib. Terima kasih!</p>
+                      <p className="text-emerald-700 font-semibold text-[11px]">Bongkar muat selesai! Silakan ambil dokumen tanda terima di pos, lalu keluar gate secara tertib. Terima kasih!</p>
                     )}
                   </div>
                 </div>
@@ -449,9 +449,9 @@ export const DriverCheckinView: React.FC = () => {
             <div className="flex gap-2.5">
               <button
                 onClick={handleReset}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 px-4 bg-slate-800 hover:bg-slate-750 active:bg-slate-850 text-slate-300 border border-slate-700/80 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 px-4 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 border border-slate-200 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
               >
-                <LogOut className="w-4 h-4 text-slate-450" />
+                <LogOut className="w-4 h-4 text-slate-500" />
                 Daftar Antrean Baru
               </button>
             </div>
@@ -463,7 +463,7 @@ export const DriverCheckinView: React.FC = () => {
       {/* Footer Branding */}
       <footer className="w-full max-w-md mx-auto pt-6 pb-2 text-center text-[10px] text-slate-500 font-medium">
         <p>© 2026 POS LOGISTIK INDONESIA • GATE & YARD MANAGEMENT SYSTEM</p>
-        <p className="mt-0.5 text-slate-650">Real-time status updates via Firestore Reactive OnSnapshot</p>
+        <p className="mt-0.5 text-slate-500">Real-time status updates via Firestore Reactive OnSnapshot</p>
       </footer>
 
     </div>

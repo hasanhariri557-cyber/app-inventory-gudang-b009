@@ -503,6 +503,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const lastCloudStrings = React.useRef<{ [key: string]: string }>({});
   const unsubscribersRef = React.useRef<(() => void)[]>([]);
   const recentlyDeletedIdsRef = React.useRef<Set<string>>(new Set());
+  const recentlyUpdatedIdsRef = React.useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const loadAllFromCloud = async () => {
@@ -669,7 +670,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const unsub = onSnapshot(collection(db, name), (snapshot) => {
             const rawItems: any[] = [];
             snapshot.forEach((doc) => {
-              if (!recentlyDeletedIdsRef.current.has(doc.id)) {
+              if (!recentlyDeletedIdsRef.current.has(doc.id) && !recentlyUpdatedIdsRef.current.has(doc.id)) {
                 rawItems.push({ id: doc.id, ...doc.data() });
               }
             });
@@ -1301,6 +1302,9 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateDriverQueueStatus = async (id: string, status: DriverQueueItem['status']) => {
+    recentlyUpdatedIdsRef.current.add(id);
+    setTimeout(() => recentlyUpdatedIdsRef.current.delete(id), 2000);
+
     let updatedItem: DriverQueueItem | null = null;
     setDriverQueues(prev => prev.map(item => {
       if (item.id === id) {
