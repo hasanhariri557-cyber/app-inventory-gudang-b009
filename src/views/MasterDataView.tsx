@@ -81,31 +81,64 @@ export const MasterDataView: React.FC = () => {
   const [uppPallet, setUppPallet] = useState<string>('1000');
   const [modalAllocations, setModalAllocations] = useState<Record<string, string | number>>({});
 
+  useEffect(() => {
+    const draft = {
+      materialId,
+      namaBarang,
+      kategori,
+      satuan,
+      minStock,
+      maxStock,
+      lokasiDefaut,
+      statusAktif,
+      currentStock,
+      uppPallet,
+      modalAllocations
+    };
+    localStorage.setItem('MATERIAL_FORM_DRAFT', JSON.stringify(draft));
+  }, [materialId, namaBarang, kategori, satuan, minStock, maxStock, lokasiDefaut, statusAktif, currentStock, uppPallet, modalAllocations]);
+
   const openCreateModal = () => {
     setEditingMaterial(null);
-    const maxId = materials.reduce((max, mat) => {
-      const match = mat.id.match(/^MAT-(\d+)$/);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        return num > max ? num : max;
-      }
-      return max;
-    }, 0);
-    const autoId = `MAT-${String(maxId + 1).padStart(3, '0')}`;
-    setMaterialId(autoId);
-    setNamaBarang('');
-    setKategori(categories[0]?.nama || 'Packaging');
-    setSatuan(units[0]?.nama || 'PCS');
-    setMinStock(50);
-    setMaxStock(1000);
-    setLokasiDefault('Gedung A1');
-    setStatusAktif(true);
-    setCurrentStock('0');
-    setUppPallet('1000');
+    const savedDraft = localStorage.getItem('MATERIAL_FORM_DRAFT');
+    if (savedDraft) {
+      const parsed = JSON.parse(savedDraft);
+      setMaterialId(parsed.materialId);
+      setNamaBarang(parsed.namaBarang);
+      setKategori(parsed.kategori);
+      setSatuan(parsed.satuan);
+      setMinStock(parsed.minStock);
+      setMaxStock(parsed.maxStock);
+      setLokasiDefault(parsed.lokasiDefaut);
+      setStatusAktif(parsed.statusAktif);
+      setCurrentStock(parsed.currentStock);
+      setUppPallet(parsed.uppPallet);
+      setModalAllocations(parsed.modalAllocations);
+    } else {
+      const maxId = materials.reduce((max, mat) => {
+        const match = mat.id.match(/^MAT-(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          return num > max ? num : max;
+        }
+        return max;
+      }, 0);
+      const autoId = `MAT-${String(maxId + 1).padStart(3, '0')}`;
+      setMaterialId(autoId);
+      setNamaBarang('');
+      setKategori(categories[0]?.nama || 'Packaging');
+      setSatuan(units[0]?.nama || 'PCS');
+      setMinStock(50);
+      setMaxStock(1000);
+      setLokasiDefault('Gedung A1');
+      setStatusAktif(true);
+      setCurrentStock('0');
+      setUppPallet('1000');
 
-    const initAlloc: Record<string, number> = {};
-    gedungList.forEach(g => { initAlloc[g.nama] = 0; });
-    setModalAllocations(initAlloc);
+      const initAlloc: Record<string, number> = {};
+      gedungList.forEach(g => { initAlloc[g.nama] = 0; });
+      setModalAllocations(initAlloc);
+    }
     setIsModalOpen(true);
   };
 
@@ -188,6 +221,7 @@ export const MasterDataView: React.FC = () => {
       }
     }
 
+    localStorage.removeItem('MATERIAL_FORM_DRAFT');
     setRefreshKey(prev => prev + 1);
     setIsModalOpen(false);
   };

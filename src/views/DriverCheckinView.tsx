@@ -19,6 +19,25 @@ export const DriverCheckinView: React.FC = () => {
   const [jenisBarang, setJenisBarang] = useState('');
   const [customJenisBarang, setCustomJenisBarang] = useState('');
   const [aktivitas, setAktivitas] = useState<'Bongkar' | 'Muat'>('Bongkar');
+
+  useEffect(() => {
+    const draft = { platNomor, namaSupir, namaVendor, noHp, jenisBarang, customJenisBarang, aktivitas };
+    localStorage.setItem('DRIVER_CHECKIN_DRAFT', JSON.stringify(draft));
+  }, [platNomor, namaSupir, namaVendor, noHp, jenisBarang, customJenisBarang, aktivitas]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('DRIVER_CHECKIN_DRAFT');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setPlatNomor(parsed.platNomor || '');
+      setNamaSupir(parsed.namaSupir || '');
+      setNamaVendor(parsed.namaVendor || '');
+      setNoHp(parsed.noHp || '');
+      setJenisBarang(parsed.jenisBarang || '');
+      setCustomJenisBarang(parsed.customJenisBarang || '');
+      setAktivitas(parsed.aktivitas || 'Bongkar');
+    }
+  }, []);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -97,6 +116,7 @@ export const DriverCheckinView: React.FC = () => {
       setJenisBarang('');
       setCustomJenisBarang('');
       setAktivitas('Bongkar');
+      localStorage.removeItem('DRIVER_CHECKIN_DRAFT');
     } catch (err) {
       setErrorMessage('Gagal mendaftarkan antrean. Silakan coba beberapa saat lagi.');
     } finally {
