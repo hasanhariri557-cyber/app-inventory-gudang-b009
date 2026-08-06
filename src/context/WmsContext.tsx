@@ -1295,21 +1295,27 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setDriverQueues(prev => [newQueueItem, ...prev]);
+    await saveToFirestore('driverQueues', id, newQueueItem);
     showNotification('Pendaftaran Driver Berhasil', `Nomor Antrian: ${nextQueueNum}. Silakan menunggu panggilan petugas.`, 'success', 'Antrian Gate & Docking');
     return nextQueueNum;
   };
 
   const updateDriverQueueStatus = async (id: string, status: DriverQueueItem['status']) => {
+    let updatedItem: DriverQueueItem | null = null;
     setDriverQueues(prev => prev.map(item => {
       if (item.id === id) {
-        return {
+        updatedItem = {
           ...item,
           status,
           waktuStatus: new Date().toISOString()
         };
+        return updatedItem;
       }
       return item;
     }));
+    if (updatedItem) {
+      await saveToFirestore('driverQueues', id, updatedItem);
+    }
     showNotification('Status Antrian Diperbarui', `Antrian telah diubah statusnya menjadi ${status}.`, 'info', 'Antrian Gate & Docking');
   };
 
