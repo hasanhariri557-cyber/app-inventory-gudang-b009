@@ -670,7 +670,10 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const unsub = onSnapshot(collection(db, name), (snapshot) => {
             const rawItems: any[] = [];
             snapshot.forEach((doc) => {
-              if (!recentlyDeletedIdsRef.current.has(doc.id) && !recentlyUpdatedIdsRef.current.has(doc.id)) {
+              if (!recentlyDeletedIdsRef.current.has(doc.id)) {
+                if (name !== 'driverQueues' && recentlyUpdatedIdsRef.current.has(doc.id)) {
+                  return; // Skip updated ones for others if needed
+                }
                 rawItems.push({ id: doc.id, ...doc.data() });
               }
             });
