@@ -153,6 +153,7 @@ export const IncomingView: React.FC = () => {
     }
   });
   const [jenisBarangFilter, setJenisBarangFilter] = useState<string>('');
+  const [loadingQueueId, setLoadingQueueId] = useState<string | null>(null);
   const [timeTick, setTimeTick] = useState(0);
 
   useEffect(() => {
@@ -1148,31 +1149,65 @@ export const IncomingView: React.FC = () => {
                       <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
                         {item.status === 'Menunggu' && (
                           <button
-                            onClick={() => updateDriverQueueStatus(item.id, 'Dipanggil')}
-                            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-all cursor-pointer inline-flex items-center gap-1"
+                            disabled={loadingQueueId === item.id}
+                            onClick={async () => {
+                              setLoadingQueueId(item.id);
+                              try {
+                                await updateDriverQueueStatus(item.id, 'Dipanggil');
+                              } finally {
+                                setLoadingQueueId(null);
+                              }
+                            }}
+                            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-all cursor-pointer inline-flex items-center gap-1 disabled:opacity-50"
                           >
-                            <Volume2 className="w-3 h-3" />
+                            {loadingQueueId === item.id ? (
+                              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            ) : (
+                              <Volume2 className="w-3 h-3" />
+                            )}
                             Panggil
                           </button>
                         )}
                         {item.status === 'Dipanggil' && (
                           <button
-                            onClick={() => {
-                              updateDriverQueueStatus(item.id, 'Bongkar Muat');
-                              setActiveAutofillDriver(item);
+                            disabled={loadingQueueId === item.id}
+                            onClick={async () => {
+                              setLoadingQueueId(item.id);
+                              try {
+                                await updateDriverQueueStatus(item.id, 'Bongkar Muat');
+                                setActiveAutofillDriver(item);
+                              } finally {
+                                setLoadingQueueId(null);
+                              }
                             }}
-                            className="px-2.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-all cursor-pointer inline-flex items-center gap-1"
+                            className="px-2.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-all cursor-pointer inline-flex items-center gap-1 disabled:opacity-50"
                           >
-                            <Play className="w-3 h-3" />
+                            {loadingQueueId === item.id ? (
+                              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            ) : (
+                              <Play className="w-3 h-3" />
+                            )}
                             Bongkar Muat
                           </button>
                         )}
                         {item.status === 'Bongkar Muat' && (
                           <button
-                            onClick={() => updateDriverQueueStatus(item.id, 'Selesai')}
-                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-all cursor-pointer inline-flex items-center gap-1"
+                            disabled={loadingQueueId === item.id}
+                            onClick={async () => {
+                              setLoadingQueueId(item.id);
+                              try {
+                                await updateDriverQueueStatus(item.id, 'Selesai');
+                              } finally {
+                                setLoadingQueueId(null);
+                              }
+                            }}
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-all cursor-pointer inline-flex items-center gap-1 disabled:opacity-50"
                           >
-                            <CheckSquare className="w-3 h-3" />
+                            {loadingQueueId === item.id ? (
+                              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            ) : (
+                              <CheckSquare className="w-3 h-3" />
+                            )}
                             Selesai
                           </button>
                         )}

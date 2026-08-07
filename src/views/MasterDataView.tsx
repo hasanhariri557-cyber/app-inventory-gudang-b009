@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Package, Plus, Search, Filter, Edit3, Trash2, CheckCircle2, XCircle, FileSpreadsheet, AlertCircle, Upload, MapPin, Download } from 'lucide-react';
 import { useWms } from '../context/WmsContext';
 import { Material } from '../types';

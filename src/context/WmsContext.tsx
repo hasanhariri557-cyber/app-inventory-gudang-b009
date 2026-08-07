@@ -510,27 +510,27 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setFirebaseSyncStatus('loading');
       try {
         console.log('Fetching initial WMS dataset from Firestore...');
-        const cloudMaterials = await loadCollectionFromFirestore('materials');
-        const cloudUsers = await loadCollectionFromFirestore('users');
-        const cloudGedung = await loadCollectionFromFirestore('gedungList');
-        const cloudVendors = await loadCollectionFromFirestore('vendors');
-        const cloudIncoming = await loadCollectionFromFirestore('incomingHeaders');
-        const cloudRejects = await loadCollectionFromFirestore('rejects');
-        const cloudPutaway = await loadCollectionFromFirestore('putAways');
-        const cloudOutbound = await loadCollectionFromFirestore('outboundHeaders');
-        const cloudOpname = await loadCollectionFromFirestore('stockOpnames');
-        const cloudMutasi = await loadCollectionFromFirestore('mutasis');
-        const cloudKartuStock = await loadCollectionFromFirestore('kartuStocks');
-        const cloudForkliftActivities = await loadCollectionFromFirestore('forkliftActivities');
-        const cloudCategories = await loadCollectionFromFirestore('categories');
-        const cloudUnits = await loadCollectionFromFirestore('units');
-        const cloudZones = await loadCollectionFromFirestore('zones');
-        const cloudJenisBarang = await loadCollectionFromFirestore('jenisBarangOptions');
-        const cloudAuditLogs = await loadCollectionFromFirestore('auditLogs');
-        const cloudPermissions = await loadCollectionFromFirestore('rolePermissions');
-        const cloudAdminAuth = await loadCollectionFromFirestore('adminAuthorities');
-        const cloudMenuConfigs = await loadCollectionFromFirestore('menuConfigs');
-        const cloudBranding = await loadCollectionFromFirestore('branding');
+        const cloudMaterials = await loadCollectionFromFirestore('materials', true);
+        const cloudUsers = await loadCollectionFromFirestore('users', true);
+        const cloudGedung = await loadCollectionFromFirestore('gedungList', true);
+        const cloudVendors = await loadCollectionFromFirestore('vendors', true);
+        const cloudIncoming = await loadCollectionFromFirestore('incomingHeaders', true);
+        const cloudRejects = await loadCollectionFromFirestore('rejects', true);
+        const cloudPutaway = await loadCollectionFromFirestore('putAways', true);
+        const cloudOutbound = await loadCollectionFromFirestore('outboundHeaders', true);
+        const cloudOpname = await loadCollectionFromFirestore('stockOpnames', true);
+        const cloudMutasi = await loadCollectionFromFirestore('mutasis', true);
+        const cloudKartuStock = await loadCollectionFromFirestore('kartuStocks', true);
+        const cloudForkliftActivities = await loadCollectionFromFirestore('forkliftActivities', true);
+        const cloudCategories = await loadCollectionFromFirestore('categories', true);
+        const cloudUnits = await loadCollectionFromFirestore('units', true);
+        const cloudZones = await loadCollectionFromFirestore('zones', true);
+        const cloudJenisBarang = await loadCollectionFromFirestore('jenisBarangOptions', true);
+        const cloudAuditLogs = await loadCollectionFromFirestore('auditLogs', true);
+        const cloudPermissions = await loadCollectionFromFirestore('rolePermissions', true);
+        const cloudAdminAuth = await loadCollectionFromFirestore('adminAuthorities', true);
+        const cloudMenuConfigs = await loadCollectionFromFirestore('menuConfigs', true);
+        const cloudBranding = await loadCollectionFromFirestore('branding', true);
 
         // If cloud database is totally empty, seed it with the current states
         if (cloudMaterials.length === 0 && cloudUsers.length === 0) {
@@ -1305,25 +1305,33 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateDriverQueueStatus = async (id: string, status: DriverQueueItem['status']) => {
-    recentlyUpdatedIdsRef.current.add(id);
-    setTimeout(() => recentlyUpdatedIdsRef.current.delete(id), 2000);
+    const targetItem = driverQueues.find(q => q.id === id);
+    if (!targetItem) return;
 
-    let updatedItem: DriverQueueItem | null = null;
-    setDriverQueues(prev => prev.map(item => {
-      if (item.id === id) {
-        updatedItem = {
-          ...item,
-          status,
-          waktuStatus: new Date().toISOString()
-        };
-        return updatedItem;
-      }
-      return item;
-    }));
-    if (updatedItem) {
+    const previousStatus = targetItem.status;
+    const updatedItem: DriverQueueItem = {
+      ...targetItem,
+      status,
+      waktuStatus: new Date().toISOString()
+    };
+
+    try {
+      recentlyUpdatedIdsRef.current.add(id);
+      setTimeout(() => recentlyUpdatedIdsRef.current.delete(id), 2000);
+
+      // 1. Write to Firestore FIRST (Async persistence with await)
       await saveToFirestore('driverQueues', id, updatedItem);
+
+      // 2. Update local state AFTER successful persistence
+      setDriverQueues(prev => prev.map(item => item.id === id ? updatedItem : item));
+      showNotification('Status Antrian Diperbarui', `Antrian telah diubah statusnya menjadi ${status}.`, 'success', 'Antrian Gate & Docking');
+    } catch (error) {
+      console.error("Failed to update driver queue status in Firestore:", error);
+      // Rollback state on error
+      setDriverQueues(prev => prev.map(item => item.id === id ? { ...item, status: previousStatus } : item));
+      showNotification('Gagal Menyimpan ke Cloud', 'Gagal memperbarui status ke Cloud Firestore. Perubahan dibatalkan.', 'error', 'Antrian Gate & Docking');
+      throw error;
     }
-    showNotification('Status Antrian Diperbarui', `Antrian telah diubah statusnya menjadi ${status}.`, 'info', 'Antrian Gate & Docking');
   };
 
   const deleteDriverQueue = async (id: string) => {

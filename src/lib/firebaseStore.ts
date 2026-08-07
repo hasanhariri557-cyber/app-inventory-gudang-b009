@@ -1,12 +1,14 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { 
-  getFirestore, 
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   collection, 
   doc, 
   setDoc, 
   deleteDoc, 
   getDocs, 
-  writeBatch 
+  writeBatch
 } from "firebase/firestore";
 const firebaseConfig = {
   projectId: "prime-xylopolist-5v8b6",
@@ -21,8 +23,12 @@ const firebaseConfig = {
 // 1. Inisialisasi Firebase App secara aman
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// 2. Hubungkan ke Database khusus Firestore AI Studio
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// 2. Hubungkan ke Database khusus Firestore AI Studio dengan Persistent Offline Cache & Multi-Tab Manager
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+}, firebaseConfig.firestoreDatabaseId);
 
 /**
  * Helper function to deeply clean any undefined fields from objects/arrays
@@ -79,7 +85,7 @@ export async function deleteFromFirestore(collectionName: string, docId: string)
 /**
  * Load all documents from a Firestore collection
  */
-export async function loadCollectionFromFirestore(collectionName: string): Promise<any[]> {
+export async function loadCollectionFromFirestore(collectionName: string, useServer: boolean = false): Promise<any[]> {
   try {
     const querySnapshot = await getDocs(collection(db, collectionName));
     const items: any[] = [];
