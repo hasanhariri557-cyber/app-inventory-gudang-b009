@@ -505,6 +505,30 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const recentlyDeletedIdsRef = React.useRef<Set<string>>(new Set());
   const recentlyUpdatedIdsRef = React.useRef<Set<string>>(new Set());
 
+  const autoCompleteOldDriverQueues = async (items: DriverQueueItem[]): Promise<DriverQueueItem[]> => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const processed = await Promise.all(items.map(async (item) => {
+      const itemDate = (item.tanggalDaftar || '').split('T')[0];
+      if (itemDate && itemDate < todayStr && item.status !== 'Selesai') {
+        const updatedItem: DriverQueueItem = {
+          ...item,
+          status: 'Selesai',
+          waktuStatus: new Date().toISOString()
+        };
+        try {
+          recentlyUpdatedIdsRef.current.add(item.id);
+          setTimeout(() => recentlyUpdatedIdsRef.current.delete(item.id), 2000);
+          await saveToFirestore('driverQueues', item.id, updatedItem);
+        } catch (err) {
+          console.error("Failed to auto-complete old driver queue:", err);
+        }
+        return updatedItem;
+      }
+      return item;
+    }));
+    return processed;
+  };
+
   useEffect(() => {
     const loadAllFromCloud = async () => {
       setFirebaseSyncStatus('loading');
@@ -531,6 +555,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const cloudAdminAuth = await loadCollectionFromFirestore('adminAuthorities', true);
         const cloudMenuConfigs = await loadCollectionFromFirestore('menuConfigs', true);
         const cloudBranding = await loadCollectionFromFirestore('branding', true);
+        const cloudDriverQueues = await loadCollectionFromFirestore('driverQueues', true);
 
         // If cloud database is totally empty, seed it with the current states
         if (cloudMaterials.length === 0 && cloudUsers.length === 0) {
@@ -551,6 +576,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           await syncCollectionToFirestore('units', units);
           await syncCollectionToFirestore('zones', zones);
           await syncCollectionToFirestore('jenisBarangOptions', jenisBarangOptions);
+          await syncCollectionToFirestore('driverQueues', driverQueues);
           
           await saveToFirestore('rolePermissions', 'v1', rolePermissions);
           await saveToFirestore('adminAuthorities', 'v1', adminAuthorities);
@@ -572,6 +598,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastCloudStrings.current['units'] = JSON.stringify(units);
           lastCloudStrings.current['zones'] = JSON.stringify(zones);
           lastCloudStrings.current['jenisBarangOptions'] = JSON.stringify(jenisBarangOptions);
+          lastCloudStrings.current['driverQueues'] = JSON.stringify(driverQueues);
           lastCloudStrings.current['rolePermissions'] = JSON.stringify(rolePermissions);
           lastCloudStrings.current['adminAuthorities'] = JSON.stringify(adminAuthorities);
           lastCloudStrings.current['menuConfigs'] = JSON.stringify(menuConfigs);
@@ -594,6 +621,11 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (cloudUnits.length > 0) setUnits(deduplicateById(cloudUnits));
           if (cloudZones.length > 0) setZones(deduplicateById(cloudZones));
           if (cloudJenisBarang.length > 0) setJenisBarangOptions(deduplicateById(cloudJenisBarang));
+          if (cloudDriverQueues.length > 0) {
+            const processedQueues = await autoCompleteOldDriverQueues(deduplicateById(cloudDriverQueues));
+            setDriverQueues(processedQueues);
+            lastCloudStrings.current['driverQueues'] = JSON.stringify(processedQueues);
+          }
 
           lastCloudStrings.current['materials'] = JSON.stringify(cloudMaterials);
           lastCloudStrings.current['users'] = JSON.stringify(cloudUsers);
@@ -667,7 +699,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ];
 
         collectionsToListen.forEach(({ name, setter }) => {
-          const unsub = onSnapshot(collection(db, name), (snapshot) => {
+          const unsub = onSnapshot(collection(db, name), async (snapshot) => {
             const rawItems: any[] = [];
             snapshot.forEach((doc) => {
               if (!recentlyDeletedIdsRef.current.has(doc.id)) {
@@ -677,7 +709,10 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 rawItems.push({ id: doc.id, ...doc.data() });
               }
             });
-            const items = deduplicateById(rawItems);
+            let items = deduplicateById(rawItems);
+            if (name === 'driverQueues') {
+              items = await autoCompleteOldDriverQueues(items);
+            }
             const itemsStr = JSON.stringify(items);
             if (lastCloudStrings.current[name] !== itemsStr) {
               lastCloudStrings.current[name] = itemsStr;
