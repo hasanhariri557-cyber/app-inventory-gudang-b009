@@ -73,12 +73,17 @@ export const DriverCheckinView: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // Find if this plate is already in "Menunggu", "Dipanggil", or "Bongkar Muat" status
+      // Find if this plate is already in "Menunggu", "Dipanggil", or "Bongkar Muat" status for today
       const cleanPlate = platNomor.replace(/\s+/g, '').toUpperCase();
-      const isAlreadyQueued = driverQueues.some(q => 
-        q.platNomor.replace(/\s+/g, '').toUpperCase() === cleanPlate && 
-        q.status !== 'Selesai'
-      );
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isAlreadyQueued = driverQueues.some(q => {
+        const qDate = (q.tanggalDaftar || '').split('T')[0];
+        return (
+          qDate === todayStr &&
+          q.platNomor.replace(/\s+/g, '').toUpperCase() === cleanPlate && 
+          q.status !== 'Selesai'
+        );
+      });
 
       if (isAlreadyQueued) {
         setErrorMessage(`Plat Kendaraan ${platNomor.toUpperCase()} sedang dalam antrean aktif.`);
