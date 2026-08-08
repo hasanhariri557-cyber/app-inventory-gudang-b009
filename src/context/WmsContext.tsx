@@ -19,7 +19,8 @@ import {
   MenuConfigSettings,
   DriverQueueItem,
   AuditLog,
-  ForkliftActivity
+  ForkliftActivity,
+  CycleCountItem
 } from '../types';
 import {
   INITIAL_USERS,
@@ -203,6 +204,11 @@ interface WmsContextType {
   // Audit Logs
   auditLogs: AuditLog[];
   addAuditLog: (action: AuditLog['action'], module: string, targetName: string, details: string) => void;
+
+  cycleCounts: CycleCountItem[];
+  addCycleCount: (item: Omit<CycleCountItem, 'id' | 'tanggal' | 'jam' | 'selisih'>) => Promise<void>;
+  updateCycleCountStatus: (id: string, status: 'Pending' | 'Selesai') => Promise<void>;
+  deleteCycleCount: (id: string) => Promise<void>;
 }
 
 const WmsContext = createContext<WmsContextType | undefined>(undefined);
@@ -471,6 +477,11 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_FORKLIFT_ACTIVITIES;
   });
 
+  const [cycleCounts, setCycleCounts] = useState<CycleCountItem[]>(() => {
+    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_cycle_counts`);
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [rolePermissions, setRolePermissions] = useState<RolePermissions>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_role_permissions`);
     return saved ? JSON.parse(saved) : INITIAL_ROLE_PERMISSIONS;
@@ -556,6 +567,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const cloudMenuConfigs = await loadCollectionFromFirestore('menuConfigs', true);
         const cloudBranding = await loadCollectionFromFirestore('branding', true);
         const cloudDriverQueues = await loadCollectionFromFirestore('driverQueues', true);
+        const cloudCycleCounts = await loadCollectionFromFirestore('cycleCounts', true);
 
         // If cloud database is totally empty, seed it with the current states
         if (cloudMaterials.length === 0 && cloudUsers.length === 0) {
@@ -577,6 +589,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           await syncCollectionToFirestore('zones', zones);
           await syncCollectionToFirestore('jenisBarangOptions', jenisBarangOptions);
           await syncCollectionToFirestore('driverQueues', driverQueues);
+          await syncCollectionToFirestore('cycleCounts', cycleCounts);
           
           await saveToFirestore('rolePermissions', 'v1', rolePermissions);
           await saveToFirestore('adminAuthorities', 'v1', adminAuthorities);
@@ -621,6 +634,10 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (cloudUnits.length > 0) setUnits(deduplicateById(cloudUnits));
           if (cloudZones.length > 0) setZones(deduplicateById(cloudZones));
           if (cloudJenisBarang.length > 0) setJenisBarangOptions(deduplicateById(cloudJenisBarang));
+          if (cloudCycleCounts.length > 0) {
+            setCycleCounts(deduplicateById(cloudCycleCounts));
+            lastCloudStrings.current['cycleCounts'] = JSON.stringify(cloudCycleCounts);
+          }
           if (cloudDriverQueues.length > 0) {
             const processedQueues = await autoCompleteOldDriverQueues(deduplicateById(cloudDriverQueues));
             setDriverQueues(processedQueues);
@@ -696,6 +713,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           { name: 'zones', setter: setZones },
           { name: 'jenisBarangOptions', setter: setJenisBarangOptions },
           { name: 'driverQueues', setter: setDriverQueues },
+          { name: 'cycleCounts', setter: setCycleCounts },
         ];
 
         collectionsToListen.forEach(({ name, setter }) => {
@@ -798,7 +816,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (currentUser.role === 'Security' && activeMenu === 'dashboard') {
         setActiveMenu('incoming');
       } else if (currentUser.role === 'Forklift' && activeMenu === 'dashboard') {
-        setActiveMenu('forklift_activity');
+        setActiveMenu('warehouse_layout');
       }
     }
   }, [currentUser, isLoggedIn]);
@@ -857,7 +875,8 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_zones`, JSON.stringify(zones));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_jenis_barang_options`, JSON.stringify(jenisBarangOptions));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_driver_queues`, JSON.stringify(driverQueues));
-  }, [users, materials, gedungList, vendors, incomingHeaders, rejects, putAways, outboundHeaders, stockOpnames, mutasis, kartuStocks, forkliftActivities, rolePermissions, adminAuthorities, menuConfigs, categories, units, zones, jenisBarangOptions, driverQueues]);
+    localStorage.setItem(`${LOCAL_STORAGE_KEY}_cycle_counts`, JSON.stringify(cycleCounts));
+  }, [users, materials, gedungList, vendors, incomingHeaders, rejects, putAways, outboundHeaders, stockOpnames, mutasis, kartuStocks, forkliftActivities, rolePermissions, adminAuthorities, menuConfigs, categories, units, zones, jenisBarangOptions, driverQueues, cycleCounts]);
 
   // Sync to Firestore on changes
   useEffect(() => {
@@ -1006,6 +1025,15 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (firebaseSyncStatus !== 'synced') return;
+    const currentStr = JSON.stringify(cycleCounts);
+    const oldStr = lastCloudStrings.current['cycleCounts'] || '[]';
+    if (currentStr === oldStr) return;
+    lastCloudStrings.current['cycleCounts'] = currentStr;
+    syncCollectionIncrementally('cycleCounts', cycleCounts, oldStr);
+  }, [cycleCounts, firebaseSyncStatus]);
+
+  useEffect(() => {
+    if (firebaseSyncStatus !== 'synced') return;
     const currentStr = JSON.stringify(rolePermissions);
     if (currentStr === lastCloudStrings.current['rolePermissions']) return;
     lastCloudStrings.current['rolePermissions'] = currentStr;
@@ -1083,7 +1111,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (role === 'Admin') return true;
     if (role === 'Security' && menu === 'incoming') return true;
-    if (role === 'Forklift' && menu === 'forklift_activity') return true;
+    if (role === 'Forklift' && menu === 'warehouse_layout') return true;
 
     if (rolePermissions[menuKey] && rolePermissions[menuKey][role] !== undefined) {
       return rolePermissions[menuKey][role];
@@ -1099,7 +1127,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return ['dashboard', 'stock_opname', 'put_away', 'warehouse_layout', 'mutasi', 'kartu_stock'].includes(menu);
     }
     if (role === 'Forklift') {
-      return ['forklift_activity', 'warehouse_layout'].includes(menu);
+      return ['warehouse_layout'].includes(menu);
     }
     return false;
   };
@@ -2201,6 +2229,79 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Stock Opname Dihapus', `Data Opname #${id} berhasil dihapus.`, 'info', 'Pusat Laporan');
   };
 
+  const addCycleCount = async (item: Omit<CycleCountItem, 'id' | 'tanggal' | 'jam' | 'selisih'>) => {
+    const now = new Date();
+    const tanggal = now.toISOString().split('T')[0];
+    const jam = now.toTimeString().split(' ')[0].substring(0, 5);
+    
+    // Check if a pending entry for this materialId and assignedTo already exists
+    const existing = cycleCounts.find(c => c.materialId === item.materialId && c.assignedTo === item.assignedTo && c.status === 'Pending');
+    const selisih = Number(item.qtyFisik) - Number(item.qtySistem);
+
+    if (existing) {
+      // If qtyFisik was already entered/saved (not default 0), show error notification to prevent double save
+      if (existing.qtyFisik !== 0 && item.qtyFisik !== 0) {
+        showNotification('Gagal Menyimpan', `Material ${item.namaBarang} sudah disimpan sebelumnya. Tidak dapat menyimpan dua kali.`, 'error', 'Cycle Count');
+        return;
+      }
+
+      const updated: CycleCountItem = {
+        ...existing,
+        ...item,
+        selisih,
+        tanggal,
+        jam
+      };
+      recentlyUpdatedIdsRef.current.add(existing.id);
+      setTimeout(() => recentlyUpdatedIdsRef.current.delete(existing.id), 2000);
+
+      setCycleCounts(prev => prev.map(c => c.id === existing.id ? updated : c));
+      await saveToFirestore('cycleCounts', existing.id, updated);
+      showNotification('Cycle Count Diperbarui', `Pencatatan Cycle Count untuk ${item.namaBarang} (${item.gedung}) diperbarui.`, 'success', 'Cycle Count');
+      return;
+    }
+
+    const id = `CC-${Date.now().toString().slice(-6)}`;
+    const newItem: CycleCountItem = {
+      ...item,
+      id,
+      tanggal,
+      jam,
+      selisih
+    };
+
+    recentlyUpdatedIdsRef.current.add(id);
+    setTimeout(() => recentlyUpdatedIdsRef.current.delete(id), 2000);
+
+    setCycleCounts(prev => [newItem, ...prev]);
+    await saveToFirestore('cycleCounts', id, newItem);
+    showNotification('Cycle Count Disimpan', `Pencatatan Cycle Count untuk ${item.namaBarang} (${item.gedung}) berhasil disimpan.`, 'success', 'Cycle Count');
+  };
+
+  const updateCycleCountStatus = async (id: string, status: 'Pending' | 'Selesai') => {
+    const target = cycleCounts.find(c => c.id === id);
+    if (!target) return;
+
+    const updated: CycleCountItem = {
+      ...target,
+      status
+    };
+
+    recentlyUpdatedIdsRef.current.add(id);
+    setTimeout(() => recentlyUpdatedIdsRef.current.delete(id), 2000);
+
+    setCycleCounts(prev => prev.map(c => c.id === id ? updated : c));
+    await saveToFirestore('cycleCounts', id, updated);
+    showNotification('Status Cycle Count Diperbarui', `Status Cycle Count #${id} diubah menjadi ${status}.`, 'info', 'Cycle Count');
+  };
+
+  const deleteCycleCount = async (id: string) => {
+    recentlyDeletedIdsRef.current.add(id);
+    setCycleCounts(prev => prev.filter(c => c.id !== id));
+    await deleteFromFirestore('cycleCounts', id);
+    showNotification('Cycle Count Dihapus', `Data Cycle Count #${id} berhasil dihapus.`, 'info', 'Cycle Count');
+  };
+
   const deleteKartuStock = async (id: string) => {
     recentlyDeletedIdsRef.current.add(id);
     setKartuStocks(prev => prev.filter(ks => ks.id !== id));
@@ -2487,7 +2588,11 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateDriverQueueStatus,
       deleteDriverQueue,
       auditLogs,
-      addAuditLog
+      addAuditLog,
+      cycleCounts,
+      addCycleCount,
+      updateCycleCountStatus,
+      deleteCycleCount
     }}>
       {children}
     </WmsContext.Provider>

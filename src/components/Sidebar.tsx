@@ -45,7 +45,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { key: 'master_data', label: '2. Master Data Barang', icon: Package, badge: kpis.totalMaterial },
     { key: 'incoming', label: '3. Incoming Barang', icon: ArrowDownLeft, badge: kpis.totalIncomingHariIni },
     { key: 'warehouse_layout', label: '4. Warehouse Layout', icon: MapPin },
-    { key: 'forklift_activity', label: '4c. Aktivitas Forklift', icon: Truck },
     { key: 'outbound', label: '5a. Outbound Delivery', icon: ArrowUpRight, badge: kpis.totalOutboundHariIni },
     { key: 'outbound_manual', label: '5b. Surat Jalan Manual', icon: FileText },
     { key: 'stock_opname', label: '6. Stock Opname', icon: ClipboardCheck, badge: kpis.soBelumSelesaiCount > 0 ? `${kpis.soBelumSelesaiCount} Pending` : undefined },

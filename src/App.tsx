@@ -22,7 +22,6 @@ import { StockOpnameView } from './views/StockOpnameView';
 import { KartuStockView } from './views/KartuStockView';
 import { LaporanView } from './views/LaporanView';
 import { SettingView } from './views/SettingView';
-import { ForkliftActivityView } from './views/ForkliftActivityView';
 import { DriverCheckinView } from './views/DriverCheckinView';
 import { Lock } from 'lucide-react';
 
@@ -31,7 +30,6 @@ const MENU_TITLES: Record<MenuKey, string> = {
   master_data: '2. Master Data Barang',
   incoming: '3. Incoming Barang (Receiving)',
   warehouse_layout: '4. Warehouse Layout (Denah)',
-  forklift_activity: '4c. Aktivitas Operator Forklift',
   outbound: '5a. Outbound Delivery',
   outbound_manual: '5b. Surat Jalan Manual',
   stock_opname: '6. Stock Opname Harian',
@@ -145,7 +143,6 @@ function MainApp() {
       case 'master_data': return <MasterDataView />;
       case 'incoming': return <IncomingView />;
       case 'warehouse_layout': return <WarehouseLayoutView />;
-      case 'forklift_activity': return <ForkliftActivityView />;
       case 'outbound': return <OutboundView />;
       case 'outbound_manual': return <OutboundManualView />;
       case 'stock_opname': return <StockOpnameView />;

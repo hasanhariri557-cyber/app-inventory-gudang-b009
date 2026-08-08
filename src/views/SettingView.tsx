@@ -912,7 +912,6 @@ export const SettingView: React.FC = () => {
     { key: 'outbound', label: 'Outbound', icon: ArrowUpRight },
     { key: 'kartuStock', label: 'Kartu Stock', icon: CreditCard },
     { key: 'laporan', label: 'Laporan WMS', icon: FileText },
-    { key: 'forkliftActivity', label: 'Aktivitas Forklift', icon: Truck },
     { key: 'setting', label: 'Setting System', icon: Settings }
   ];
 

@@ -189,7 +189,6 @@ export type MenuKey =
   | 'stock_opname'
   | 'kartu_stock'
   | 'laporan'
-  | 'forklift_activity'
   | 'setting';
 
 export type RolePermissions = Record<MenuKey, { Admin: boolean; Checker: boolean; Stoker: boolean; Security: boolean; Forklift: boolean }>;
@@ -245,6 +244,24 @@ export interface AuditLog {
   module: string;
   targetName: string;
   details: string;
+}
+
+export interface CycleCountItem {
+  id: string;
+  tanggal: string;
+  jam: string;
+  gedung: string;
+  materialId: string;
+  namaBarang: string;
+  kategori: string;
+  satuan: string;
+  qtySistem: number;
+  qtyFisik: number;
+  selisih: number;
+  catatan: string;
+  pic: string;
+  assignedTo?: string;
+  status: 'Pending' | 'Selesai';
 }
 
 

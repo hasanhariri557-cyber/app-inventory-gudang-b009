@@ -414,7 +414,6 @@ export const INITIAL_ROLE_PERMISSIONS: RolePermissions = {
   stock_opname: { Admin: true, Checker: true, Stoker: true, Security: false, Forklift: false },
   kartu_stock: { Admin: true, Checker: true, Stoker: true, Security: false, Forklift: false },
   laporan: { Admin: true, Checker: true, Stoker: false, Security: false, Forklift: false },
-  forklift_activity: { Admin: true, Checker: true, Stoker: true, Security: false, Forklift: true },
   setting: { Admin: true, Checker: false, Stoker: false, Security: false, Forklift: false }
 };
 
